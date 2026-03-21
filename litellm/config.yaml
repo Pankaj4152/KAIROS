@@ -2,14 +2,14 @@ model_list:
   - model_name: tier1
     litellm_params:
       model: ollama/phi:latest
-      api_base: http://localhost:11434    # local, no Docker
+      api_base: http://localhost:11434
 
   - model_name: tier2
     litellm_params:
-      model: claude-haiku-4-5
-      api_key: os.environ/ANTHROPIC_API_KEY
+      model: ollama/llama3:latest
+      api_base: http://localhost:11434
 
   - model_name: tier3
     litellm_params:
-      model: claude-sonnet-4-6
-      api_key: os.environ/ANTHROPIC_API_KEY
+      model: gemini/gemini-1.5-pro
+      api_key: os.environ/GEMINI_API_KEY

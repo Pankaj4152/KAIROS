@@ -5,3 +5,4 @@ sqlite_vec
 pipecat
 ollama
 litellm[proxy]
+python-telegram-bot

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kairos</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f0f;
+      color: #e8e8e8;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 16px 24px;
+      border-bottom: 1px solid #2a2a2a;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo {
+      width: 28px; height: 28px;
+      background: #7f77dd;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 600; color: #fff;
+    }
+
+    header h1 { font-size: 16px; font-weight: 500; color: #fff; }
+
+    .status {
+      margin-left: auto;
+      font-size: 12px;
+      color: #666;
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #555;
+      transition: background 0.3s;
+    }
+
+    .status-dot.connected { background: #1d9e75; }
+    .status-dot.thinking  { background: #ef9f27; }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .msg {
+      max-width: 680px;
+      line-height: 1.65;
+      font-size: 15px;
+    }
+
+    .msg.user {
+      align-self: flex-end;
+      background: #1e1e2e;
+      border: 1px solid #2a2a3a;
+      padding: 10px 16px;
+      border-radius: 16px 16px 4px 16px;
+      color: #c8c8e8;
+    }
+
+    .msg.assistant {
+      align-self: flex-start;
+      color: #e8e8e8;
+      white-space: pre-wrap;
+    }
+
+    .msg.assistant .name {
+      font-size: 11px;
+      font-weight: 600;
+      color: #7f77dd;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+
+    .cursor {
+      display: inline-block;
+      width: 2px; height: 16px;
+      background: #7f77dd;
+      margin-left: 2px;
+      vertical-align: middle;
+      animation: blink 0.8s step-end infinite;
+    }
+
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .input-area {
+      padding: 16px 24px;
+      border-top: 1px solid #2a2a2a;
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    textarea {
+      flex: 1;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      color: #e8e8e8;
+      font-family: inherit;
+      font-size: 15px;
+      padding: 10px 14px;
+      resize: none;
+      min-height: 44px;
+      max-height: 160px;
+      outline: none;
+      transition: border-color 0.2s;
+      line-height: 1.5;
+    }
+
+    textarea:focus { border-color: #534ab7; }
+    textarea::placeholder { color: #444; }
+
+    button {
+      width: 44px; height: 44px;
+      background: #534ab7;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s, transform 0.1s;
+      flex-shrink: 0;
+    }
+
+    button:hover  { background: #6258c4; }
+    button:active { transform: scale(0.95); }
+    button:disabled { background: #2a2a2a; cursor: not-allowed; }
+
+    button svg { width: 18px; height: 18px; fill: #fff; }
+
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #444;
+      gap: 8px;
+    }
+
+    .empty-state .big { font-size: 32px; font-weight: 600; color: #2a2a2a; }
+    .empty-state .sub { font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">K</div>
+  <h1>Kairos</h1>
+  <div class="status">
+    <div class="status-dot" id="dot"></div>
+    <span id="status-text">connecting...</span>
+  </div>
+</header>
+
+<div id="messages">
+  <div class="empty-state" id="empty">
+    <div class="big">Kairos</div>
+    <div class="sub">Your personal AI assistant</div>
+  </div>
+</div>
+
+<div class="input-area">
+  <textarea
+    id="input"
+    placeholder="Message Kairos..."
+    rows="1"
+    disabled
+  ></textarea>
+  <button id="send-btn" disabled>
+    <svg viewBox="0 0 24 24"><path d="M2 21L23 12 2 3v7l15 2-15 2v7z"/></svg>
+  </button>
+</div>
+
+<script>
+  const messagesEl = document.getElementById('messages');
+  const inputEl    = document.getElementById('input');
+  const sendBtn    = document.getElementById('send-btn');
+  const dot        = document.getElementById('dot');
+  const statusText = document.getElementById('status-text');
+  const emptyEl    = document.getElementById('empty');
+
+  let ws;
+  let currentMsgEl = null;
+  let isGenerating = false;
+
+  function setStatus(state) {
+    dot.className = 'status-dot ' + state;
+    statusText.textContent = {
+      connected:  'connected',
+      thinking:   'thinking...',
+      connecting: 'connecting...',
+    }[state] || state;
+  }
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+    ws.onopen = () => {
+      setStatus('connected');
+      inputEl.disabled  = false;
+      sendBtn.disabled  = false;
+      inputEl.focus();
+    };
+
+    ws.onclose = () => {
+      setStatus('connecting');
+      inputEl.disabled = true;
+      sendBtn.disabled = true;
+      // Auto-reconnect after 2s
+      setTimeout(connect, 2000);
+    };
+
+    ws.onerror = () => ws.close();
+
+    ws.onmessage = (evt) => {
+      const token = evt.data;
+
+      if (token === '[DONE]') {
+        // Remove blinking cursor
+        const cursor = currentMsgEl?.querySelector('.cursor');
+        if (cursor) cursor.remove();
+        currentMsgEl = null;
+        isGenerating = false;
+        setStatus('connected');
+        inputEl.disabled = false;
+        sendBtn.disabled = false;
+        inputEl.focus();
+        return;
+      }
+
+      if (!currentMsgEl) {
+        // First token — create the assistant message bubble
+        if (emptyEl) emptyEl.remove();
+
+        currentMsgEl = document.createElement('div');
+        currentMsgEl.className = 'msg assistant';
+        currentMsgEl.innerHTML = '<div class="name">Kairos</div><span class="content"></span><span class="cursor"></span>';
+        messagesEl.appendChild(currentMsgEl);
+      }
+
+      // Append token to the content span
+      currentMsgEl.querySelector('.content').textContent += token;
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    };
+  }
+
+  function send() {
+    const text = inputEl.value.trim();
+    if (!text || isGenerating || ws.readyState !== WebSocket.OPEN) return;
+
+    // Remove empty state
+    if (emptyEl && emptyEl.parentNode) emptyEl.remove();
+
+    // Show user message
+    const userEl = document.createElement('div');
+    userEl.className = 'msg user';
+    userEl.textContent = text;
+    messagesEl.appendChild(userEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    // Send to server
+    ws.send(text);
+
+    // Disable input while generating
+    inputEl.value = '';
+    inputEl.style.height = 'auto';
+    isGenerating = true;
+    setStatus('thinking');
+    inputEl.disabled = true;
+    sendBtn.disabled = true;
+  }
+
+  // Send on Enter (Shift+Enter = newline)
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  });
+
+  // Auto-resize textarea as user types
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = 'auto';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
+  });
+
+  sendBtn.addEventListener('click', send);
+
+  connect();
+</script>
+</body>
+</html>
