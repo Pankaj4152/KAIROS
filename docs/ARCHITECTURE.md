@@ -2,7 +2,7 @@
 
 > How Kairos processes every request — from input to response to memory.
 
-**← [Back to README](../README.md)** · [User Guide](GUIDE.md) · [Setup](SETUP.md) · [Contributing](CONTRIBUTING.md)
+**← [Back to README](../README.md)** · [User Guide](GUIDE.md) · [Setup](SETUP.md) · [Contributing](CONTRIBUTING.md) · [Diagrams HTML](architecture.html) · [Diagrams PDF](kairos_architecture.pdf)
 
 ---
 
@@ -68,7 +68,7 @@ Every request becomes a `KairosEvent` before anything else touches it. The orche
 
 ## Three-Tier Model Cascade
 
-Every request is classified by a local model (free, ~100ms) before any cloud call:
+Every request is classified by a local model (free, ~100ms) before any cloud call. See the [Interactive Diagrams (HTML)](architecture.html) or [PDF](kairos_architecture.pdf) for the full Routing flow.
 
 | Tier | Model | Cost | Latency | Use for |
 |------|-------|------|---------|---------|

@@ -2,7 +2,7 @@
 
 > How to extend Kairos — add channels, tools, search backends, and memory domains.
 
-**← [Back to README](../README.md)** · [User Guide](GUIDE.md) · [Architecture](ARCHITECTURE.md) · [Setup](SETUP.md)
+**← [Back to README](../README.md)** · [User Guide](GUIDE.md) · [Architecture](ARCHITECTURE.md) · [Setup](SETUP.md) · [Diagrams HTML](architecture.html) · [Diagrams PDF](kairos_architecture.pdf)
 
 ---
 

@@ -2,7 +2,7 @@
 
 > Everything Kairos can do for you — features, use cases, and example prompts.
 
-**← [Back to README](../README.md)** · [Architecture](ARCHITECTURE.md) · [Setup](SETUP.md) · [Contributing](CONTRIBUTING.md)
+**← [Back to README](../README.md)** · [Architecture](ARCHITECTURE.md) · [Setup](SETUP.md) · [Contributing](CONTRIBUTING.md) · [Diagrams HTML](architecture.html) · [Diagrams PDF](kairos_architecture.pdf)
 
 ---
 

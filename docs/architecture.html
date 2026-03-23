@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kairos — Architecture & Workflow Diagrams</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #ffffff;
+    --bg2: #f7f6f3;
+    --bg3: #f0efe9;
+    --text: #1a1a18;
+    --text2: #4a4a47;
+    --text3: #7a7a76;
+    --border: rgba(0,0,0,0.10);
+    --border2: rgba(0,0,0,0.18);
+    --accent: #5340d7;
+    --radius: 12px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #18181a;
+      --bg2: #222224;
+      --bg3: #2a2a2d;
+      --text: #e8e6de;
+      --text2: #a8a69e;
+      --text3: #6a6a66;
+      --border: rgba(255,255,255,0.08);
+      --border2: rgba(255,255,255,0.15);
+    }
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 0 0 80px;
+  }
+
+  header {
+    padding: 56px 48px 40px;
+    border-bottom: 1px solid var(--border);
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  header h1 {
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+    margin-bottom: 10px;
+  }
+
+  header p {
+    color: var(--text2);
+    font-size: 16px;
+  }
+
+  .tag {
+    display: inline-block;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin: 12px 4px 0 0;
+  }
+
+  .toc {
+    max-width: 960px;
+    margin: 40px auto;
+    padding: 0 48px;
+  }
+
+  .toc h2 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    margin-bottom: 16px;
+  }
+
+  .toc ol {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .toc a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toc a:hover { text-decoration: underline; }
+
+  .toc .num {
+    color: var(--text3);
+    font-size: 12px;
+    min-width: 20px;
+  }
+
+  main {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 48px;
+  }
+
+  .diagram-section {
+    margin: 60px 0;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+
+  .diagram-section:first-child { border-top: none; }
+
+  .section-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .section-num {
+    font-size: 13px;
+    color: var(--text3);
+    font-weight: 500;
+    min-width: 24px;
+    padding-top: 3px;
+  }
+
+  .section-header h2 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+
+  .section-desc {
+    color: var(--text2);
+    font-size: 14px;
+    margin: 6px 0 0 40px;
+    line-height: 1.6;
+  }
+
+  .diagram-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    margin-top: 24px;
+    overflow-x: auto;
+  }
+
+  .diagram-card svg {
+    display: block;
+    width: 100%;
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  /* SVG color system */
+  .c-purple rect, .c-purple circle { fill: #EEEDFE; stroke: #534AB7; }
+  .c-purple text { fill: #3C3489; }
+  .c-teal rect, .c-teal circle { fill: #E1F5EE; stroke: #0F6E56; }
+  .c-teal text { fill: #085041; }
+  .c-coral rect, .c-coral circle { fill: #FAECE7; stroke: #993C1D; }
+  .c-coral text { fill: #712B13; }
+  .c-amber rect, .c-amber circle { fill: #FAEEDA; stroke: #854F0B; }
+  .c-amber text { fill: #633806; }
+  .c-gray rect, .c-gray circle { fill: #F1EFE8; stroke: #5F5E5A; }
+  .c-gray text { fill: #444441; }
+  .c-blue rect, .c-blue circle { fill: #E6F1FB; stroke: #185FA5; }
+  .c-blue text { fill: #0C447C; }
+  .c-green rect, .c-green circle { fill: #EAF3DE; stroke: #3B6D11; }
+  .c-green text { fill: #27500A; }
+  .c-pink rect, .c-pink circle { fill: #FBEAF0; stroke: #993556; }
+  .c-pink text { fill: #72243E; }
+
+  @media (prefers-color-scheme: dark) {
+    .c-purple rect, .c-purple circle { fill: #3C3489; stroke: #AFA9EC; }
+    .c-purple text { fill: #CECBF6; }
+    .c-teal rect, .c-teal circle { fill: #085041; stroke: #5DCAA5; }
+    .c-teal text { fill: #9FE1CB; }
+    .c-coral rect, .c-coral circle { fill: #712B13; stroke: #F0997B; }
+    .c-coral text { fill: #F5C4B3; }
+    .c-amber rect, .c-amber circle { fill: #633806; stroke: #EF9F27; }
+    .c-amber text { fill: #FAC775; }
+    .c-gray rect, .c-gray circle { fill: #444441; stroke: #B4B2A9; }
+    .c-gray text { fill: #D3D1C7; }
+    .c-blue rect, .c-blue circle { fill: #0C447C; stroke: #85B7EB; }
+    .c-blue text { fill: #B5D4F4; }
+    .c-green rect, .c-green circle { fill: #27500A; stroke: #97C459; }
+    .c-green text { fill: #C0DD97; }
+    .c-pink rect, .c-pink circle { fill: #72243E; stroke: #ED93B1; }
+    .c-pink text { fill: #F4C0D1; }
+  }
+
+  text.t  { font-family: inherit; font-size: 14px; font-weight: 400; fill: var(--text); }
+  text.ts { font-family: inherit; font-size: 12px; font-weight: 400; fill: var(--text2); }
+  text.th { font-family: inherit; font-size: 14px; font-weight: 600; fill: var(--text); }
+  .c-purple text.t, .c-purple text.ts, .c-purple text.th { fill: inherit; }
+  .c-teal text.t, .c-teal text.ts, .c-teal text.th { fill: inherit; }
+  .c-coral text.t, .c-coral text.ts, .c-coral text.th { fill: inherit; }
+  .c-amber text.t, .c-amber text.ts, .c-amber text.th { fill: inherit; }
+  .c-gray text.t, .c-gray text.ts, .c-gray text.th { fill: inherit; }
+  .c-blue text.t, .c-blue text.ts, .c-blue text.th { fill: inherit; }
+  .c-green text.t, .c-green text.ts, .c-green text.th { fill: inherit; }
+  .c-pink text.t, .c-pink text.ts, .c-pink text.th { fill: inherit; }
+
+  line.arr { stroke: var(--text3); stroke-width: 1.5px; fill: none; }
+  line.leader { stroke: var(--text3); stroke-width: 0.5px; stroke-dasharray: 3 2; fill: none; }
+
+  .box rect { fill: var(--bg2); stroke: var(--border2); }
+  .box text { fill: var(--text); }
+
+  .key-table {
+    margin: 24px 0 0 40px;
+    border-collapse: collapse;
+    font-size: 13px;
+    width: calc(100% - 40px);
+  }
+  .key-table th {
+    text-align: left;
+    color: var(--text3);
+    font-weight: 500;
+    padding: 6px 16px 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .key-table td {
+    padding: 8px 16px 8px 0;
+    color: var(--text2);
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .key-table td:first-child { color: var(--text); font-weight: 500; white-space: nowrap; }
+
+  .dot {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+
+  footer {
+    max-width: 960px;
+    margin: 80px auto 0;
+    padding: 32px 48px;
+    border-top: 1px solid var(--border);
+    color: var(--text3);
+    font-size: 13px;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Kairos — Architecture Documentation</h1>
+  <p>Complete system diagrams and workflow reference for the Kairos personal AI voice assistant</p>
+  <div>
+    <span class="tag">v1.0</span>
+    <span class="tag">March 2026</span>
+    <span class="tag">Python 3.11+</span>
+    <span class="tag">Single-user</span>
+  </div>
+</header>
+
+<div class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#s1"><span class="num">01</span> 6-Layer System Overview</a></li>
+    <li><a href="#s2"><span class="num">02</span> Voice Request Flow</a></li>
+    <li><a href="#s3"><span class="num">03</span> Three-Tier Model Routing</a></li>
+    <li><a href="#s4"><span class="num">04</span> Memory Stack</a></li>
+    <li><a href="#s5"><span class="num">05</span> Async Write-back Flow</a></li>
+    <li><a href="#s6"><span class="num">06</span> Tool Execution & Safe Dispatch</a></li>
+    <li><a href="#s7"><span class="num">07</span> Infrastructure & Deployment</a></li>
+  </ol>
+</div>
+
+<main>
+
+<!-- ─── DIAGRAM 1 ─────────────────────────────────────────────────── -->
+<section class="diagram-section" id="s1">
+  <div class="section-header">
+    <span class="section-num">01</span>
+    <h2>6-Layer System Overview</h2>
+  </div>
+  <p class="section-desc">
+    Every request flows top-to-bottom through six layers. Memory write-back is async and never blocks the response path.
+    Color key: <span style="color:#534AB7">■ purple</span> = input, gray = gateway, <span style="color:#0F6E56">■ teal</span> = orchestrator,
+    <span style="color:#854F0B">■ amber</span> = memory, <span style="color:#993C1D">■ coral</span> = tools, <span style="color:#185FA5">■ blue</span> = output.
+  </p>
+
+  <div class="diagram-card">
+    <svg viewBox="0 0 860 620" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <!-- dividers -->
+      <line x1="72" y1="20" x2="72" y2="600" stroke="#88887f" stroke-width="0.5" opacity="0.3"/>
+      <line x1="72" y1="130" x2="820" y2="130" stroke="#88887f" stroke-width="0.5" opacity="0.3"/>
+      <line x1="72" y1="220" x2="820" y2="220" stroke="#88887f" stroke-width="0.5" opacity="0.3"/>
+      <line x1="72" y1="310" x2="820" y2="310" stroke="#88887f" stroke-width="0.5" opacity="0.3"/>
+      <line x1="72" y1="410" x2="820" y2="410" stroke="#88887f" stroke-width="0.5" opacity="0.3"/>
+      <line x1="72" y1="502" x2="820" y2="502" stroke="#88887f" stroke-width="0.5" opacity="0.3"/>
+      <!-- labels -->
+      <text class="ts" x="38" y="88" text-anchor="middle" dominant-baseline="central">Input</text>
+      <text class="ts" x="38" y="175" text-anchor="middle" dominant-baseline="central">Gateway</text>
+      <text class="ts" x="38" y="265" text-anchor="middle" dominant-baseline="central">Orchestrator</text>
+      <text class="ts" x="38" y="360" text-anchor="middle" dominant-baseline="central">Memory</text>
+      <text class="ts" x="38" y="456" text-anchor="middle" dominant-baseline="central">Tools</text>
+      <text class="ts" x="38" y="551" text-anchor="middle" dominant-baseline="central">Output</text>
+      <!-- L1 input -->
+      <g class="c-purple"><rect x="84" y="62" width="158" height="52" rx="8" stroke-width="0.5"/><text class="th" x="163" y="83" text-anchor="middle" dominant-baseline="central">Voice</text><text class="ts" x="163" y="101" text-anchor="middle" dominant-baseline="central">Pipecat + Porcupine</text></g>
+      <g class="c-purple"><rect x="256" y="62" width="158" height="52" rx="8" stroke-width="0.5"/><text class="th" x="335" y="83" text-anchor="middle" dominant-baseline="central">Telegram</text><text class="ts" x="335" y="101" text-anchor="middle" dominant-baseline="central">python-telegram-bot</text></g>
+      <g class="c-purple"><rect x="428" y="62" width="158" height="52" rx="8" stroke-width="0.5"/><text class="th" x="507" y="83" text-anchor="middle" dominant-baseline="central">Web UI</text><text class="ts" x="507" y="101" text-anchor="middle" dominant-baseline="central">FastAPI + WebSocket</text></g>
+      <g class="c-purple"><rect x="600" y="62" width="158" height="52" rx="8" stroke-width="0.5"/><text class="th" x="679" y="83" text-anchor="middle" dominant-baseline="central">Cron</text><text class="ts" x="679" y="101" text-anchor="middle" dominant-baseline="central">APScheduler</text></g>
+      <line x1="163" y1="114" x2="163" y2="148" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <line x1="335" y1="114" x2="335" y2="148" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <line x1="507" y1="114" x2="507" y2="148" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <line x1="679" y1="114" x2="679" y2="148" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <!-- L2 gateway -->
+      <g class="c-gray"><rect x="84" y="148" width="280" height="52" rx="8" stroke-width="0.5"/><text class="th" x="224" y="169" text-anchor="middle" dominant-baseline="central">Channel normalizer</text><text class="ts" x="224" y="187" text-anchor="middle" dominant-baseline="central">KairosEvent dataclass</text></g>
+      <g class="c-gray"><rect x="378" y="148" width="380" height="52" rx="8" stroke-width="0.5"/><text class="th" x="568" y="169" text-anchor="middle" dominant-baseline="central">Session gateway</text><text class="ts" x="568" y="187" text-anchor="middle" dominant-baseline="central">Auth · rate-limit · session resolve</text></g>
+      <line x1="364" y1="174" x2="378" y2="174" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <line x1="224" y1="200" x2="224" y2="238" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <line x1="568" y1="200" x2="568" y2="238" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <!-- L3 orchestrator -->
+      <g class="c-teal"><rect x="84" y="238" width="186" height="52" rx="8" stroke-width="0.5"/><text class="th" x="177" y="259" text-anchor="middle" dominant-baseline="central">Nano classifier</text><text class="ts" x="177" y="277" text-anchor="middle" dominant-baseline="central">phi-3-mini · &lt;100ms</text></g>
+      <g class="c-teal"><rect x="284" y="238" width="186" height="52" rx="8" stroke-width="0.5"/><text class="th" x="377" y="259" text-anchor="middle" dominant-baseline="central">Context assembler</text><text class="ts" x="377" y="277" text-anchor="middle" dominant-baseline="central">Parallel domain fetch</text></g>
+      <g class="c-teal"><rect x="484" y="238" width="274" height="52" rx="8" stroke-width="0.5"/><text class="th" x="621" y="259" text-anchor="middle" dominant-baseline="central">LiteLLM proxy</text><text class="ts" x="621" y="277" text-anchor="middle" dominant-baseline="central">Tier 1 · Tier 2 · Tier 3</text></g>
+      <line x1="270" y1="264" x2="284" y2="264" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <line x1="470" y1="264" x2="484" y2="264" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <line x1="377" y1="290" x2="377" y2="338" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <line x1="621" y1="290" x2="621" y2="338" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <!-- L4 memory -->
+      <g class="c-amber"><rect x="84" y="338" width="168" height="52" rx="8" stroke-width="0.5"/><text class="th" x="168" y="359" text-anchor="middle" dominant-baseline="central">profile.md</text><text class="ts" x="168" y="377" text-anchor="middle" dominant-baseline="central">Always-on context</text></g>
+      <g class="c-amber"><rect x="266" y="338" width="168" height="52" rx="8" stroke-width="0.5"/><text class="th" x="350" y="359" text-anchor="middle" dominant-baseline="central">SQLite</text><text class="ts" x="350" y="377" text-anchor="middle" dominant-baseline="central">Tasks · events · habits</text></g>
+      <g class="c-amber"><rect x="448" y="338" width="168" height="52" rx="8" stroke-width="0.5"/><text class="th" x="532" y="359" text-anchor="middle" dominant-baseline="central">sqlite-vec</text><text class="ts" x="532" y="377" text-anchor="middle" dominant-baseline="central">Semantic recall</text></g>
+      <g class="c-amber"><rect x="630" y="338" width="128" height="52" rx="8" stroke-width="0.5"/><text class="th" x="694" y="359" text-anchor="middle" dominant-baseline="central">Sessions</text><text class="ts" x="694" y="377" text-anchor="middle" dominant-baseline="central">JSON · 20 turns</text></g>
+      <line x1="350" y1="390" x2="350" y2="430" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <line x1="532" y1="390" x2="532" y2="430" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <!-- L5 tools -->
+      <g class="c-coral"><rect x="84" y="430" width="168" height="52" rx="8" stroke-width="0.5"/><text class="th" x="168" y="451" text-anchor="middle" dominant-baseline="central">web_search</text><text class="ts" x="168" y="469" text-anchor="middle" dominant-baseline="central">Brave API</text></g>
+      <g class="c-coral"><rect x="266" y="430" width="168" height="52" rx="8" stroke-width="0.5"/><text class="th" x="350" y="451" text-anchor="middle" dominant-baseline="central">calendar</text><text class="ts" x="350" y="469" text-anchor="middle" dominant-baseline="central">Google Calendar</text></g>
+      <g class="c-coral"><rect x="448" y="430" width="168" height="52" rx="8" stroke-width="0.5"/><text class="th" x="532" y="451" text-anchor="middle" dominant-baseline="central">memory_write</text><text class="ts" x="532" y="469" text-anchor="middle" dominant-baseline="central">SQLite + vec</text></g>
+      <g class="c-coral"><rect x="630" y="430" width="128" height="52" rx="8" stroke-width="0.5"/><text class="th" x="694" y="451" text-anchor="middle" dominant-baseline="central">send_message</text><text class="ts" x="694" y="469" text-anchor="middle" dominant-baseline="central">Telegram push</text></g>
+      <line x1="350" y1="482" x2="350" y2="522" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <line x1="532" y1="482" x2="532" y2="522" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
+      <!-- L6 output -->
+      <g class="c-blue"><rect x="84" y="522" width="178" height="52" rx="8" stroke-width="0.5"/><text class="th" x="173" y="543" text-anchor="middle" dominant-baseline="central">TTS stream</text><text class="ts" x="173" y="561" text-anchor="middle" dominant-baseline="central">Cartesia · ~80ms</text></g>
+      <g class="c-blue"><rect x="276" y="522" width="178" height="52" rx="8" stroke-width="0.5"/><text class="th" x="365" y="543" text-anchor="middle" dominant-baseline="central">Telegram reply</text><text class="ts" x="365" y="561" text-anchor="middle" dominant-baseline="central">Split at paragraphs</text></g>
+      <g class="c-blue"><rect x="468" y="522" width="178" height="52" rx="8" stroke-width="0.5"/><text class="th" x="557" y="543" text-anchor="middle" dominant-baseline="central">WebSocket stream</text><text class="ts" x="557" y="561" text-anchor="middle" dominant-baseline="central">Token-by-token</text></g>
+      <g class="c-blue"><rect x="660" y="522" width="98" height="52" rx="8" stroke-width="0.5"/><text class="th" x="709" y="543" text-anchor="middle" dominant-baseline="central">Write-back</text><text class="ts" x="709" y="561" text-anchor="middle" dominant-baseline="central">Async embed</text></g>
+      <!-- async loop -->
+      <path d="M758 548 L790 548 L790 364 L758 364" fill="none" stroke="#88887f" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr1)" opacity="0.5"/>
+      <text class="ts" x="808" y="456" text-anchor="middle" dominant-baseline="central" transform="rotate(90 808 456)" opacity="0.7">async</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ─── DIAGRAM 2 ─────────────────────────────────────────────────── -->
+<section class="diagram-section" id="s2">
+  <div class="section-header">
+    <span class="section-num">02</span>
+    <h2>Voice Request Flow</h2>
+  </div>
+  <p class="section-desc">
+    End-to-end trace from wake word detection to first audio output. Target: &lt;500ms total for Tier 1, &lt;700ms for Tier 2.
+  </p>
+  <div class="diagram-card">
+    <svg viewBox="0 0 680 760" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g class="c-purple"><rect x="160" y="20" width="310" height="52" rx="8" stroke-width="0.5"/><text class="th" x="315" y="41" text-anchor="middle" dominant-baseline="central">Wake word detected</text><text class="ts" x="315" y="59" text-anchor="middle" dominant-baseline="central">Porcupine · always listening · offline</text></g>
+      <line x1="315" y1="72" x2="315" y2="100" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <g class="c-purple"><rect x="160" y="100" width="310" height="52" rx="8" stroke-width="0.5"/><text class="th" x="315" y="121" text-anchor="middle" dominant-baseline="central">VAD records speech</text><text class="ts" x="315" y="139" text-anchor="middle" dominant-baseline="central">silero-vad · end-of-speech ~200ms</text></g>
+      <line x1="315" y1="152" x2="315" y2="180" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <g class="c-purple"><rect x="160" y="180" width="310" height="52" rx="8" stroke-width="0.5"/><text class="th" x="315" y="201" text-anchor="middle" dominant-baseline="central">STT transcription</text><text class="ts" x="315" y="219" text-anchor="middle" dominant-baseline="central">Deepgram streaming · ~280ms</text></g>
+      <line x1="315" y1="232" x2="315" y2="260" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <g class="c-gray"><rect x="160" y="260" width="310" height="52" rx="8" stroke-width="0.5"/><text class="th" x="315" y="281" text-anchor="middle" dominant-baseline="central">Channel normalizer</text><text class="ts" x="315" y="299" text-anchor="middle" dominant-baseline="central">KairosEvent · session resolved</text></g>
+      <line x1="315" y1="312" x2="315" y2="340" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <g class="c-teal"><rect x="160" y="340" width="310" height="52" rx="8" stroke-width="0.5"/><text class="th" x="315" y="361" text-anchor="middle" dominant-baseline="central">Nano classifier</text><text class="ts" x="315" y="379" text-anchor="middle" dominant-baseline="central">phi-3-mini · intent + tier + domains</text></g>
+      <line x1="315" y1="392" x2="315" y2="420" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <g class="c-teal"><rect x="160" y="420" width="310" height="52" rx="8" stroke-width="0.5"/><text class="th" x="315" y="441" text-anchor="middle" dominant-baseline="central">Context assembler</text><text class="ts" x="315" y="459" text-anchor="middle" dominant-baseline="central">Parallel SQLite fetch · &lt;50ms</text></g>
+      <line x1="315" y1="472" x2="315" y2="500" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <g class="c-teal"><rect x="160" y="500" width="310" height="52" rx="8" stroke-width="0.5"/><text class="th" x="315" y="521" text-anchor="middle" dominant-baseline="central">LLM generation</text><text class="ts" x="315" y="539" text-anchor="middle" dominant-baseline="central">Tier 1 ~50ms · Tier 2 ~300ms</text></g>
+      <line x1="315" y1="552" x2="315" y2="580" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <g class="c-blue"><rect x="160" y="580" width="310" height="52" rx="8" stroke-width="0.5"/><text class="th" x="315" y="601" text-anchor="middle" dominant-baseline="central">TTS streaming</text><text class="ts" x="315" y="619" text-anchor="middle" dominant-baseline="central">Cartesia · first audio chunk ~80ms</text></g>
+      <line x1="315" y1="632" x2="315" y2="660" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr2)"/>
+      <g class="c-amber"><rect x="160" y="660" width="310" height="52" rx="8" stroke-width="0.5"/><text class="th" x="315" y="681" text-anchor="middle" dominant-baseline="central">Async write-back</text><text class="ts" x="315" y="699" text-anchor="middle" dominant-baseline="central">Embed · session append · fact extract</text></g>
+      <!-- latency callouts -->
+      <text class="ts" x="495" y="131" dominant-baseline="central">~200ms</text>
+      <line x1="470" y1="126" x2="492" y2="126" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2"/>
+      <text class="ts" x="495" y="211" dominant-baseline="central">~280ms</text>
+      <line x1="470" y1="206" x2="492" y2="206" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2"/>
+      <text class="ts" x="495" y="371" dominant-baseline="central">&lt;100ms</text>
+      <line x1="470" y1="366" x2="492" y2="366" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2"/>
+      <text class="ts" x="495" y="451" dominant-baseline="central">&lt;50ms</text>
+      <line x1="470" y1="446" x2="492" y2="446" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2"/>
+      <text class="ts" x="495" y="521" dominant-baseline="central">50–300ms</text>
+      <line x1="470" y1="516" x2="492" y2="516" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2"/>
+      <text class="ts" x="495" y="611" dominant-baseline="central">~80ms</text>
+      <line x1="470" y1="606" x2="492" y2="606" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2"/>
+      <!-- total -->
+      <rect x="120" y="726" width="400" height="26" rx="6" fill="none" stroke="#88887f" stroke-width="0.5" opacity="0.4"/>
+      <text class="ts" x="320" y="739" text-anchor="middle" dominant-baseline="central">Total Tier 1: &lt;500ms · Total Tier 2: &lt;700ms</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ─── DIAGRAM 3 ─────────────────────────────────────────────────── -->
+<section class="diagram-section" id="s3">
+  <div class="section-header">
+    <span class="section-num">03</span>
+    <h2>Three-Tier Model Routing</h2>
+  </div>
+  <p class="section-desc">
+    The nano classifier runs first on every request and decides which tier handles it. All calls go through LiteLLM proxy — never direct API calls.
+  </p>
+  <div class="diagram-card">
+    <svg viewBox="0 0 680 420" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g class="c-gray"><rect x="230" y="20" width="220" height="52" rx="8" stroke-width="0.5"/><text class="th" x="340" y="41" text-anchor="middle" dominant-baseline="central">Nano classifier</text><text class="ts" x="340" y="59" text-anchor="middle" dominant-baseline="central">complexity 1 · 2 · 3</text></g>
+      <path d="M230 46 L90 46 L90 140" fill="none" stroke="#88887f" stroke-width="1" marker-end="url(#arr3)" opacity="0.6"/>
+      <line x1="340" y1="72" x2="340" y2="140" stroke="#88887f" stroke-width="1" marker-end="url(#arr3)" opacity="0.6"/>
+      <path d="M450 46 L590 46 L590 140" fill="none" stroke="#88887f" stroke-width="1" marker-end="url(#arr3)" opacity="0.6"/>
+      <text class="ts" x="90" y="128" text-anchor="middle" dominant-baseline="central">Tier 1 — free</text>
+      <text class="ts" x="340" y="128" text-anchor="middle" dominant-baseline="central">Tier 2 — fast</text>
+      <text class="ts" x="590" y="128" text-anchor="middle" dominant-baseline="central">Tier 3 — full</text>
+      <g class="c-green"><rect x="18" y="140" width="144" height="60" rx="8" stroke-width="0.5"/><text class="th" x="90" y="161" text-anchor="middle" dominant-baseline="central">phi-3-mini</text><text class="ts" x="90" y="179" text-anchor="middle" dominant-baseline="central">Ollama · ~50ms</text></g>
+      <g class="c-amber"><rect x="268" y="140" width="144" height="60" rx="8" stroke-width="0.5"/><text class="th" x="340" y="161" text-anchor="middle" dominant-baseline="central">claude-haiku-4-5</text><text class="ts" x="340" y="179" text-anchor="middle" dominant-baseline="central">~300ms · low cost</text></g>
+      <g class="c-coral"><rect x="518" y="140" width="144" height="60" rx="8" stroke-width="0.5"/><text class="th" x="590" y="161" text-anchor="middle" dominant-baseline="central">claude-sonnet-4-6</text><text class="ts" x="590" y="179" text-anchor="middle" dominant-baseline="central">~1000ms · medium</text></g>
+      <g class="c-green"><rect x="18" y="222" width="144" height="118" rx="8" stroke-width="0.5"/></g>
+      <text class="ts" x="90" y="244" text-anchor="middle">Formatting</text>
+      <text class="ts" x="90" y="262" text-anchor="middle">Simple Q&amp;A</text>
+      <text class="ts" x="90" y="280" text-anchor="middle">Classification</text>
+      <text class="ts" x="90" y="298" text-anchor="middle">Memory write-back</text>
+      <text class="ts" x="90" y="316" text-anchor="middle">Routing decisions</text>
+      <g class="c-amber"><rect x="268" y="222" width="144" height="118" rx="8" stroke-width="0.5"/></g>
+      <text class="ts" x="340" y="244" text-anchor="middle">Voice replies</text>
+      <text class="ts" x="340" y="262" text-anchor="middle">Calendar queries</text>
+      <text class="ts" x="340" y="280" text-anchor="middle">Task management</text>
+      <text class="ts" x="340" y="298" text-anchor="middle">Web search synth</text>
+      <text class="ts" x="340" y="316" text-anchor="middle">Simple reminders</text>
+      <g class="c-coral"><rect x="518" y="222" width="144" height="118" rx="8" stroke-width="0.5"/></g>
+      <text class="ts" x="590" y="244" text-anchor="middle">Complex reasoning</text>
+      <text class="ts" x="590" y="262" text-anchor="middle">Code writing</text>
+      <text class="ts" x="590" y="280" text-anchor="middle">Research synthesis</text>
+      <text class="ts" x="590" y="298" text-anchor="middle">Multi-step planning</text>
+      <text class="ts" x="590" y="316" text-anchor="middle">Deep analysis</text>
+      <rect x="80" y="366" width="520" height="30" rx="6" fill="none" stroke="#88887f" stroke-width="0.5" opacity="0.4"/>
+      <text class="ts" x="340" y="381" text-anchor="middle" dominant-baseline="central">All calls routed through LiteLLM proxy — never direct API calls</text>
+      <line x1="90" y1="340" x2="90" y2="366" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.5"/>
+      <line x1="340" y1="340" x2="340" y2="366" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.5"/>
+      <line x1="590" y1="340" x2="590" y2="366" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.5"/>
+    </svg>
+  </div>
+
+  <table class="key-table">
+    <tr><th>Tier</th><th>Model</th><th>Latency</th><th>Cost</th></tr>
+    <tr><td>Tier 1</td><td>phi-3-mini via Ollama</td><td>~50ms</td><td>Free (local)</td></tr>
+    <tr><td>Tier 2</td><td>claude-haiku-4-5</td><td>~300ms first token</td><td>Low</td></tr>
+    <tr><td>Tier 3</td><td>claude-sonnet-4-6</td><td>~1000ms first token</td><td>Medium</td></tr>
+  </table>
+</section>
+
+<!-- ─── DIAGRAM 4 ─────────────────────────────────────────────────── -->
+<section class="diagram-section" id="s4">
+  <div class="section-header">
+    <span class="section-num">04</span>
+    <h2>Memory Stack</h2>
+  </div>
+  <p class="section-desc">
+    Four distinct stores, each optimised for a different query type. sqlite-vec lives inside kairos.db — no separate process.
+  </p>
+  <div class="diagram-card">
+    <svg viewBox="0 0 680 400" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g class="c-amber"><rect x="20" y="20" width="148" height="60" rx="8" stroke-width="0.5"/><text class="th" x="94" y="41" text-anchor="middle" dominant-baseline="central">profile.md</text><text class="ts" x="94" y="59" text-anchor="middle" dominant-baseline="central">Always-on context</text></g>
+      <g class="c-teal"><rect x="182" y="20" width="148" height="60" rx="8" stroke-width="0.5"/><text class="th" x="256" y="41" text-anchor="middle" dominant-baseline="central">SQLite</text><text class="ts" x="256" y="59" text-anchor="middle" dominant-baseline="central">Structured data</text></g>
+      <g class="c-purple"><rect x="344" y="20" width="148" height="60" rx="8" stroke-width="0.5"/><text class="th" x="418" y="41" text-anchor="middle" dominant-baseline="central">sqlite-vec</text><text class="ts" x="418" y="59" text-anchor="middle" dominant-baseline="central">Semantic recall</text></g>
+      <g class="c-blue"><rect x="506" y="20" width="154" height="60" rx="8" stroke-width="0.5"/><text class="th" x="583" y="41" text-anchor="middle" dominant-baseline="central">Sessions</text><text class="ts" x="583" y="59" text-anchor="middle" dominant-baseline="central">Short-term history</text></g>
+      <line x1="94" y1="80" x2="94" y2="110" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr4)"/>
+      <line x1="256" y1="80" x2="256" y2="110" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr4)"/>
+      <line x1="418" y1="80" x2="418" y2="110" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr4)"/>
+      <line x1="583" y1="80" x2="583" y2="110" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr4)"/>
+      <g class="c-amber"><rect x="20" y="110" width="148" height="158" rx="8" stroke-width="0.5"/></g>
+      <text class="th" x="94" y="132" text-anchor="middle">Contents</text>
+      <text class="ts" x="94" y="154" text-anchor="middle">Name · timezone</text>
+      <text class="ts" x="94" y="172" text-anchor="middle">Tone + goals</text>
+      <text class="ts" x="94" y="190" text-anchor="middle">Style prefs</text>
+      <text class="ts" x="94" y="208" text-anchor="middle">Sprint focus</text>
+      <text class="th" x="94" y="232" text-anchor="middle">Access</text>
+      <text class="ts" x="94" y="252" text-anchor="middle">Prepend every prompt</text>
+      <g class="c-teal"><rect x="182" y="110" width="148" height="158" rx="8" stroke-width="0.5"/></g>
+      <text class="th" x="256" y="132" text-anchor="middle">Contents</text>
+      <text class="ts" x="256" y="154" text-anchor="middle">Tasks · events</text>
+      <text class="ts" x="256" y="172" text-anchor="middle">Habits · spending</text>
+      <text class="ts" x="256" y="190" text-anchor="middle">Body stats</text>
+      <text class="th" x="256" y="214" text-anchor="middle">Access</text>
+      <text class="ts" x="256" y="234" text-anchor="middle">SQL filter / sort</text>
+      <text class="ts" x="256" y="252" text-anchor="middle">COUNT · SUM</text>
+      <g class="c-purple"><rect x="344" y="110" width="148" height="158" rx="8" stroke-width="0.5"/></g>
+      <text class="th" x="418" y="132" text-anchor="middle">Contents</text>
+      <text class="ts" x="418" y="154" text-anchor="middle">All conversations</text>
+      <text class="ts" x="418" y="172" text-anchor="middle">Notes · articles</text>
+      <text class="ts" x="418" y="190" text-anchor="middle">Decision logs</text>
+      <text class="th" x="418" y="214" text-anchor="middle">Access</text>
+      <text class="ts" x="418" y="234" text-anchor="middle">Cosine similarity</text>
+      <text class="ts" x="418" y="252" text-anchor="middle">top-k search</text>
+      <g class="c-blue"><rect x="506" y="110" width="154" height="158" rx="8" stroke-width="0.5"/></g>
+      <text class="th" x="583" y="132" text-anchor="middle">Contents</text>
+      <text class="ts" x="583" y="154" text-anchor="middle">Last 20 turns</text>
+      <text class="ts" x="583" y="172" text-anchor="middle">Per-session JSON</text>
+      <text class="ts" x="583" y="190" text-anchor="middle">Auto-compacts</text>
+      <text class="th" x="583" y="214" text-anchor="middle">Access</text>
+      <text class="ts" x="583" y="234" text-anchor="middle">Read whole file</text>
+      <text class="ts" x="583" y="252" text-anchor="middle">Append + compact</text>
+      <rect x="20" y="300" width="640" height="30" rx="6" fill="none" stroke="#88887f" stroke-width="0.5" opacity="0.4"/>
+      <text class="ts" x="340" y="315" text-anchor="middle" dominant-baseline="central">Embeddings: text-embedding-3-small · 1536 dims · written async after every response</text>
+      <rect x="20" y="348" width="640" height="30" rx="6" fill="none" stroke="#88887f" stroke-width="0.5" opacity="0.4"/>
+      <text class="ts" x="340" y="363" text-anchor="middle" dominant-baseline="central">sqlite-vec lives inside kairos.db — no separate process, no extra infra</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ─── DIAGRAM 5 ─────────────────────────────────────────────────── -->
+<section class="diagram-section" id="s5">
+  <div class="section-header">
+    <span class="section-num">05</span>
+    <h2>Async Write-back Flow</h2>
+  </div>
+  <p class="section-desc">
+    Fires after every response via <code>asyncio.create_task()</code>. Never blocks the response path — user gets the reply first, memory catches up after.
+  </p>
+  <div class="diagram-card">
+    <svg viewBox="0 0 680 440" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g class="c-blue"><rect x="190" y="20" width="300" height="52" rx="8" stroke-width="0.5"/><text class="th" x="340" y="41" text-anchor="middle" dominant-baseline="central">Response delivered to user</text><text class="ts" x="340" y="59" text-anchor="middle" dominant-baseline="central">TTS · Telegram · WebSocket</text></g>
+      <line x1="340" y1="72" x2="340" y2="100" stroke="#88887f" stroke-width="1" opacity="0.5"/>
+      <text class="ts" x="340" y="94" text-anchor="middle">asyncio.create_task() — non-blocking</text>
+      <path d="M340 100 L100 100 L100 148" fill="none" stroke="#88887f" stroke-width="1" marker-end="url(#arr5)" opacity="0.6"/>
+      <path d="M340 100 L340 148" fill="none" stroke="#88887f" stroke-width="1" marker-end="url(#arr5)" opacity="0.6"/>
+      <path d="M340 100 L580 100 L580 148" fill="none" stroke="#88887f" stroke-width="1" marker-end="url(#arr5)" opacity="0.6"/>
+      <g class="c-amber"><rect x="18" y="148" width="164" height="60" rx="8" stroke-width="0.5"/><text class="th" x="100" y="169" text-anchor="middle" dominant-baseline="central">Embed turn</text><text class="ts" x="100" y="187" text-anchor="middle" dominant-baseline="central">text-embedding-3-small</text></g>
+      <g class="c-teal"><rect x="258" y="148" width="164" height="60" rx="8" stroke-width="0.5"/><text class="th" x="340" y="169" text-anchor="middle" dominant-baseline="central">Session append</text><text class="ts" x="340" y="187" text-anchor="middle" dominant-baseline="central">JSON · compact if &gt;20</text></g>
+      <g class="c-purple"><rect x="498" y="148" width="164" height="60" rx="8" stroke-width="0.5"/><text class="th" x="580" y="169" text-anchor="middle" dominant-baseline="central">Fact extractor</text><text class="ts" x="580" y="187" text-anchor="middle" dominant-baseline="central">Tier 1 nano model</text></g>
+      <line x1="100" y1="208" x2="100" y2="268" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr5)"/>
+      <line x1="340" y1="208" x2="340" y2="268" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr5)"/>
+      <line x1="580" y1="208" x2="580" y2="268" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr5)"/>
+      <g class="c-gray"><rect x="18" y="268" width="164" height="52" rx="8" stroke-width="0.5"/><text class="th" x="100" y="289" text-anchor="middle" dominant-baseline="central">sqlite-vec</text><text class="ts" x="100" y="307" text-anchor="middle" dominant-baseline="central">memory_vec + meta</text></g>
+      <g class="c-gray"><rect x="258" y="268" width="164" height="52" rx="8" stroke-width="0.5"/><text class="th" x="340" y="289" text-anchor="middle" dominant-baseline="central">sessions/</text><text class="ts" x="340" y="307" text-anchor="middle" dominant-baseline="central">JSON + compact summary</text></g>
+      <g class="c-gray"><rect x="498" y="268" width="164" height="52" rx="8" stroke-width="0.5"/><text class="th" x="580" y="289" text-anchor="middle" dominant-baseline="central">SQLite / prefs</text><text class="ts" x="580" y="307" text-anchor="middle" dominant-baseline="central">Structured facts</text></g>
+      <rect x="80" y="356" width="520" height="52" rx="8" fill="none" stroke="#88887f" stroke-width="0.5" opacity="0.4"/>
+      <text class="ts" x="340" y="376" text-anchor="middle" dominant-baseline="central">None of these block the response path.</text>
+      <text class="ts" x="340" y="396" text-anchor="middle" dominant-baseline="central">User gets reply first. Memory catches up after.</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ─── DIAGRAM 6 ─────────────────────────────────────────────────── -->
+<section class="diagram-section" id="s6">
+  <div class="section-header">
+    <span class="section-num">06</span>
+    <h2>Tool Execution &amp; Safe Dispatch</h2>
+  </div>
+  <p class="section-desc">
+    Every tool call is schema-validated before execution. LLM output is never passed directly to subprocess. Tool result feeds back into LLM context for final answer synthesis.
+  </p>
+  <div class="diagram-card">
+    <svg viewBox="0 0 680 480" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <g class="c-teal"><rect x="190" y="20" width="300" height="52" rx="8" stroke-width="0.5"/><text class="th" x="340" y="41" text-anchor="middle" dominant-baseline="central">LLM response</text><text class="ts" x="340" y="59" text-anchor="middle" dominant-baseline="central">Contains tool_call or plain text</text></g>
+      <line x1="340" y1="72" x2="340" y2="110" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr6)"/>
+      <g class="c-gray"><rect x="190" y="110" width="300" height="52" rx="8" stroke-width="0.5"/><text class="th" x="340" y="131" text-anchor="middle" dominant-baseline="central">Response parser</text><text class="ts" x="340" y="149" text-anchor="middle" dominant-baseline="central">tool call detected?</text></g>
+      <path d="M190 136 L80 136 L80 200" fill="none" stroke="#88887f" stroke-width="1" marker-end="url(#arr6)" opacity="0.6"/>
+      <line x1="340" y1="162" x2="340" y2="200" stroke="#88887f" stroke-width="1" marker-end="url(#arr6)" opacity="0.6"/>
+      <text class="ts" x="134" y="130">no</text>
+      <text class="ts" x="356" y="186">yes</text>
+      <g class="c-blue"><rect x="18" y="200" width="144" height="52" rx="8" stroke-width="0.5"/><text class="th" x="90" y="221" text-anchor="middle" dominant-baseline="central">Output router</text><text class="ts" x="90" y="239" text-anchor="middle" dominant-baseline="central">TTS · Telegram · WS</text></g>
+      <g class="c-coral"><rect x="190" y="200" width="300" height="52" rx="8" stroke-width="0.5"/><text class="th" x="340" y="221" text-anchor="middle" dominant-baseline="central">Tool registry lookup</text><text class="ts" x="340" y="239" text-anchor="middle" dominant-baseline="central">tool name + JSON schema</text></g>
+      <line x1="340" y1="252" x2="340" y2="290" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr6)"/>
+      <g class="c-coral"><rect x="190" y="290" width="300" height="52" rx="8" stroke-width="0.5"/><text class="th" x="340" y="311" text-anchor="middle" dominant-baseline="central">Schema validation</text><text class="ts" x="340" y="329" text-anchor="middle" dominant-baseline="central">inputs checked before execution</text></g>
+      <line x1="340" y1="342" x2="340" y2="380" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr6)"/>
+      <g class="c-coral"><rect x="190" y="380" width="300" height="52" rx="8" stroke-width="0.5"/><text class="th" x="340" y="401" text-anchor="middle" dominant-baseline="central">Executor dispatch</text><text class="ts" x="340" y="419" text-anchor="middle" dominant-baseline="central">sandboxed · allowlist enforced</text></g>
+      <text class="ts" x="510" y="222" dominant-baseline="central">web_search</text>
+      <text class="ts" x="510" y="242" dominant-baseline="central">calendar_read/write</text>
+      <text class="ts" x="510" y="262" dominant-baseline="central">send_message</text>
+      <text class="ts" x="510" y="282" dominant-baseline="central">memory_write</text>
+      <text class="ts" x="510" y="302" dominant-baseline="central">read_file</text>
+      <text class="ts" x="510" y="322" dominant-baseline="central">set_timer</text>
+      <line x1="490" y1="252" x2="507" y2="222" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.5"/>
+      <line x1="490" y1="252" x2="507" y2="242" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.5"/>
+      <line x1="490" y1="252" x2="507" y2="262" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.5"/>
+      <line x1="490" y1="252" x2="507" y2="282" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.5"/>
+      <line x1="490" y1="252" x2="507" y2="302" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.5"/>
+      <line x1="490" y1="252" x2="507" y2="322" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.5"/>
+      <path d="M190 406 L140 406 L140 460 L340 460" fill="none" stroke="#88887f" stroke-width="1" stroke-dasharray="4 3" opacity="0.5" marker-end="url(#arr6)"/>
+      <text class="ts" x="232" y="454">result → back into LLM context</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ─── DIAGRAM 7 ─────────────────────────────────────────────────── -->
+<section class="diagram-section" id="s7">
+  <div class="section-header">
+    <span class="section-num">07</span>
+    <h2>Infrastructure &amp; Deployment</h2>
+  </div>
+  <p class="section-desc">
+    Three Docker services orchestrated via Compose. Remote access via Tailscale — no port forwarding required. Three deployment phases: dev laptop → Hetzner VPS → self-hosted NAS.
+  </p>
+  <div class="diagram-card">
+    <svg viewBox="0 0 680 460" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arr7" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </marker>
+      </defs>
+      <rect x="30" y="20" width="620" height="268" rx="16" fill="none" stroke="#88887f" stroke-width="1" stroke-dasharray="6 3" opacity="0.4"/>
+      <text class="ts" x="340" y="44" text-anchor="middle" dominant-baseline="central">Docker Compose</text>
+      <g class="c-teal"><rect x="56" y="60" width="174" height="80" rx="8" stroke-width="0.5"/><text class="th" x="143" y="86" text-anchor="middle" dominant-baseline="central">kairos-runtime</text><text class="ts" x="143" y="106" text-anchor="middle" dominant-baseline="central">Python app</text><text class="ts" x="143" y="124" text-anchor="middle" dominant-baseline="central">port 8000</text></g>
+      <g class="c-purple"><rect x="253" y="60" width="174" height="80" rx="8" stroke-width="0.5"/><text class="th" x="340" y="86" text-anchor="middle" dominant-baseline="central">litellm-proxy</text><text class="ts" x="340" y="106" text-anchor="middle" dominant-baseline="central">Model router</text><text class="ts" x="340" y="124" text-anchor="middle" dominant-baseline="central">port 4000</text></g>
+      <g class="c-amber"><rect x="450" y="60" width="174" height="80" rx="8" stroke-width="0.5"/><text class="th" x="537" y="86" text-anchor="middle" dominant-baseline="central">ollama</text><text class="ts" x="537" y="106" text-anchor="middle" dominant-baseline="central">Local inference</text><text class="ts" x="537" y="124" text-anchor="middle" dominant-baseline="central">port 11434</text></g>
+      <line x1="230" y1="100" x2="253" y2="100" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr7)"/>
+      <line x1="427" y1="100" x2="450" y2="100" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr7)"/>
+      <g class="c-gray"><rect x="56" y="180" width="568" height="52" rx="8" stroke-width="0.5"/><text class="th" x="340" y="201" text-anchor="middle" dominant-baseline="central">data/ volume (mounted)</text><text class="ts" x="340" y="219" text-anchor="middle" dominant-baseline="central">kairos.db · profile.md · preferences.json · sessions/</text></g>
+      <line x1="143" y1="140" x2="143" y2="180" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.5"/>
+      <line x1="340" y1="140" x2="340" y2="180" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.5"/>
+      <line x1="537" y1="140" x2="537" y2="180" stroke="#88887f" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.5"/>
+      <g class="c-blue"><rect x="190" y="312" width="300" height="52" rx="8" stroke-width="0.5"/><text class="th" x="340" y="333" text-anchor="middle" dominant-baseline="central">Tailscale</text><text class="ts" x="340" y="351" text-anchor="middle" dominant-baseline="central">Secure remote access · no port forwarding</text></g>
+      <line x1="340" y1="288" x2="340" y2="312" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr7)"/>
+      <g class="c-gray"><rect x="30" y="392" width="194" height="52" rx="8" stroke-width="0.5"/><text class="th" x="127" y="413" text-anchor="middle" dominant-baseline="central">Phase 1 — Dev</text><text class="ts" x="127" y="431" text-anchor="middle" dominant-baseline="central">Laptop · local Docker</text></g>
+      <g class="c-gray"><rect x="243" y="392" width="194" height="52" rx="8" stroke-width="0.5"/><text class="th" x="340" y="413" text-anchor="middle" dominant-baseline="central">Phase 2 — Always-on</text><text class="ts" x="340" y="431" text-anchor="middle" dominant-baseline="central">Hetzner CX22 · ~€4/mo</text></g>
+      <g class="c-gray"><rect x="456" y="392" width="194" height="52" rx="8" stroke-width="0.5"/><text class="th" x="553" y="413" text-anchor="middle" dominant-baseline="central">Phase 3 — Self-hosted</text><text class="ts" x="553" y="431" text-anchor="middle" dominant-baseline="central">NAS · full sovereignty</text></g>
+    </svg>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <span>Kairos Architecture v1.0 · March 2026</span>
+  <span>Single-user · Python 3.11+ · Docker Compose</span>
+</footer>
+
+</body>
+</html>

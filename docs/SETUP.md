@@ -2,7 +2,7 @@
 
 > Installation, configuration, and deployment.
 
-**← [Back to README](../README.md)** · [User Guide](GUIDE.md) · [Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md)
+**← [Back to README](../README.md)** · [User Guide](GUIDE.md) · [Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [Diagrams HTML](architecture.html) · [Diagrams PDF](kairos_architecture.pdf)
 
 ---
 

@@ -93,6 +93,8 @@ cd runtime && python main.py # terminal 3
 |-----|---------------|
 | **[User Guide](docs/GUIDE.md)** | Features, use cases, example prompts — what Kairos can do for you |
 | **[Architecture](docs/ARCHITECTURE.md)** | Request pipeline, memory system, model routing, design rules |
+| **[Architecture HTML](docs/architecture.html)** | 7 interactive SVG diagrams — open locally or via GitHub Pages |
+| **[Architecture PDF](docs/kairos_architecture.pdf)** | Printable/shareable version of all architecture diagrams |
 | **[Setup Guide](docs/SETUP.md)** | Installation, configuration, environment variables, deployment |
 | **[Contributing](docs/CONTRIBUTING.md)** | How to add channels, tools, search backends, and memory domains |
 
