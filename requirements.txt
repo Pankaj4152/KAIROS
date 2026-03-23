@@ -6,3 +6,6 @@ pipecat
 ollama
 litellm[proxy]
 python-telegram-bot
+sqlite-vec
+duckduckgo-search
+jsonschema

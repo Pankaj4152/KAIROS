@@ -1,5 +1,108 @@
 {
-  "sprint_goals": [],
-  "preferences": {},
-  "project_states": {}
+  "user_profile": {
+    "identity": {
+      "name": "Pankaj",
+      "timezone": "Asia/Kolkata",
+      "role": "Engineering Student",
+      "Branch": "Computer Science",
+      "stage": "3rd_year"
+    },
+
+    "background": {
+      "focus_areas": ["AI/ML", "systems", "product building"],
+      "current_skills": ["python", "ml_basics", "system_design_learning"],
+      "experience_level": "intermediate"
+    }
+  },
+
+  "preferences": {
+    "communication": {
+      "style": "concise_direct",
+      "tone": "casual",
+      "verbosity": "low",
+      "avoid": ["fluff", "repetition", "over_explanation"]
+    },
+
+    "thinking": {
+      "priority": ["systems", "execution", "practicality"],
+      "reasoning_style": "structured",
+      "challenge_level": "high",
+      "tolerance_for_theory": "low"
+    },
+
+    "execution": {
+      "bias": "ship_fast",
+      "overengineering_tolerance": "low",
+      "decision_style": "pragmatic"
+    }
+  },
+
+  "current_state": {
+    "focus": [
+      "Kairos_voice_agent",
+      "system_design",
+      "ai_integration",
+      "daily_dsa",
+      "hands_on_ml_projects",
+      "karpathy_neural_net_lectures"
+    ],
+
+    "active_projects": [
+      "Kairos",
+      "personal_blog",
+      "Andrej_Karpathy_neural_net_lectures"
+    ],
+
+    "learning": {
+      "dsa": { "frequency": "daily", "priority": "high" },
+      "ml": { "approach": "project_based_hands_on", "priority": "high" },
+      "neural_networks": { "source": "Andrej_Karpathy_playlist", "priority": "high" }
+    },
+
+    "constraints": {
+      "time_split": ["internship", "learning", "building"],
+      "priority": "high_output_with_limited_time"
+    }
+  },
+
+  "goals": {
+    "2026": {
+      "primary": [
+        "ship_kairos_mvp",
+        "build_in_public",
+        "gain_technical_credibility",
+        "consistent_dsa_and_ml_fundamentals"
+      ],
+      "secondary": [
+        "improve_product_thinking",
+        "strengthen_system_design"
+      ]
+    },
+    "daily_habits": [
+      "dsa_practice",
+      "maintain_diet_and_gym",
+      "fix_sleep_cycle",
+      "structured_day_routine",
+      "body_and_mind_focus"
+    ]
+  },
+
+  "behavior_rules": {
+    "do": [
+      "prioritize_actionable_outputs",
+      "challenge_assumptions",
+      "optimize_for_execution"
+    ],
+    "dont": [
+      "give_generic_advice",
+      "suggest_vague_ideas",
+      "over_explain_basics",
+      "add_unnecessary_structure"
+    ]
+  },
+
+  "metadata": {
+    "version": "1.0",
+    "last_updated": "2026-03-23T09:00:00Z"
+  }
 }

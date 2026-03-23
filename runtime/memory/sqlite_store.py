@@ -184,7 +184,7 @@ def init_db():
 
 # ─── tasks ────────────────────────────────────────────────────────────────────
 
-async def add_task(
+def add_task(
     title: str,
     due_date: str | None = None,
     project: str | None = None,
@@ -210,10 +210,10 @@ async def add_task(
             conn.commit()
             return cur.lastrowid
 
-    return await asyncio.to_thread(_run)
+    return _run()
 
 
-async def fetch_open_tasks() -> list[dict]:
+def fetch_open_tasks() -> list[dict]:
     """
     All open tasks, sorted by priority (high first) then due date (soonest first).
     Used by the context assembler when the classifier returns domain='tasks'.
@@ -225,22 +225,22 @@ async def fetch_open_tasks() -> list[dict]:
             ).fetchall()
             return [dict(r) for r in rows]
 
-    return await asyncio.to_thread(_run)
+    return _run()
 
 
-async def complete_task(task_id: int) -> None:
+def complete_task(task_id: int) -> None:
     """Mark a task as done by ID."""
     def _run():
         with get_conn() as conn:
             conn.execute("UPDATE tasks SET status = 'done' WHERE id = ?", (task_id,))
             conn.commit()
 
-    await asyncio.to_thread(_run)
+    _run()
 
 
 # ─── events ───────────────────────────────────────────────────────────────────
 
-async def add_event(
+def add_event(
     title: str,
     start_time: str,
     end_time: str | None = None,
@@ -268,10 +268,10 @@ async def add_event(
             conn.commit()
             return cur.lastrowid
 
-    return await asyncio.to_thread(_run)
+    return _run()
 
 
-async def fetch_upcoming_events(limit: int = 10) -> list[dict]:
+def fetch_upcoming_events(limit: int = 10) -> list[dict]:
     """
     Events from now onward, soonest first.
     Used for general "what's coming up" queries.
@@ -285,10 +285,10 @@ async def fetch_upcoming_events(limit: int = 10) -> list[dict]:
             ).fetchall()
             return [dict(r) for r in rows]
 
-    return await asyncio.to_thread(_run)
+    return _run()
 
 
-async def fetch_events_for_date(date_str: str) -> list[dict]:
+def fetch_events_for_date(date_str: str) -> list[dict]:
     """
     Events on a specific date. date_str is "YYYY-MM-DD".
 
@@ -306,12 +306,12 @@ async def fetch_events_for_date(date_str: str) -> list[dict]:
             ).fetchall()
             return [dict(r) for r in rows]
 
-    return await asyncio.to_thread(_run)
+    return _run()
 
 
 # ─── habits ───────────────────────────────────────────────────────────────────
 
-async def fetch_habits() -> list[dict]:
+def fetch_habits() -> list[dict]:
     """
     All habits with current streak and last completion date.
     Used by the context assembler when domain='habits'.
@@ -323,10 +323,10 @@ async def fetch_habits() -> list[dict]:
             ).fetchall()
             return [dict(r) for r in rows]
 
-    return await asyncio.to_thread(_run)
+    return _run()
 
 
-async def mark_habit_done(habit_id: int) -> None:
+def mark_habit_done(habit_id: int) -> None:
     """
     Record a habit completion for today. Increments streak.
     Does not check for duplicate completion today — caller's responsibility.
@@ -340,12 +340,12 @@ async def mark_habit_done(habit_id: int) -> None:
             )
             conn.commit()
 
-    await asyncio.to_thread(_run)
+    _run()
 
 
 # ─── spending ─────────────────────────────────────────────────────────────────
 
-async def add_spending(
+def add_spending(
     amount: float,
     category: str,
     merchant: str | None = None,
@@ -371,10 +371,10 @@ async def add_spending(
             conn.commit()
             return cur.lastrowid
 
-    return await asyncio.to_thread(_run)
+    return _run()
 
 
-async def fetch_spending_summary() -> list[dict]:
+def fetch_spending_summary() -> list[dict]:
     """
     Total spending grouped by category, highest first.
     Used for "how much have I spent on X" queries.
@@ -387,4 +387,4 @@ async def fetch_spending_summary() -> list[dict]:
             ).fetchall()
             return [dict(r) for r in rows]
 
-    return await asyncio.to_thread(_run)
+    return _run()

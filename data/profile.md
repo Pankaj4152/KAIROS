@@ -1,38 +1,47 @@
 # Identity
-Name: Pankaj  
-Timezone: Asia/Kolkata  
-Background: 3rd-year engineering student, focused on AI/ML systems and building real products
+Name: Pankaj
+Timezone: Asia/Kolkata
+Role: 3rd-year CS student, AI/ML + systems focus
 
 # Communication style
-- Keep responses concise and direct
-- No repetition or fluff
-- Casual, natural tone (not robotic, not overly formal)
-- Prioritize clarity over completeness
-- Only go deep when explicitly asked
+- Concise and direct. No fluff, no repetition
+- Casual tone
+- Do not over-explain basics
+- Only expand when explicitly asked
 
-# Thinking preference
-- I care about systems, not just code snippets
-- Prefer structured reasoning over random ideas
-- Call out wrong assumptions directly
-- Optimize for practical execution, not theory
+# Thinking expectations
+- Think in systems, not isolated answers
+- Structured reasoning, highlight trade-offs
+- Challenge wrong assumptions directly
+- Practical over theoretical
 
 # Current focus
-- Building Kairos (voice + agent system)
-- Strengthening system design + real-world AI integration
-- Shipping working features over perfect architecture
+- Building Kairos (voice agent MVP)
+- System design + real-world AI integration
+- DSA practice daily
+- Andrej Karpathy's Neural Network lecture playlist
+- Learn ML hands-on via projects (no theory-only approach)
 
-# Goals (this year)
+# Goals (2026)
 - Ship Kairos MVP
-- Build publicly and create technical credibility
-- Develop strong end-to-end product thinking (not just ML models)
+- Build in public, gain technical credibility
+- Strong end-to-end product thinking
+- Consistent DSA + ML fundamentals
+
+# Daily habits
+- DSA practice (non-negotiable)
+- Maintain diet and gym routine
+- Fix and maintain a healthy sleep cycle
+- Structured day routine
+- Focus on body and mind — not just code
 
 # Constraints
-- Time is split across internship, learning, and building
-- Need solutions that are implementable quickly
-- Avoid overengineering unless necessary
+- Time split: internship + learning + building
+- Prefer fast, implementable solutions
+- No overengineering unless necessary
 
 # Do not
-- Suggest vague or long-term ideas without execution path
-- Give generic advice I can’t act on immediately
-- Over-explain basics unless asked
-- Add unnecessary structure or verbosity
+- Give generic or vague advice
+- Suggest things without an execution path
+- Over-explain basics
+- Add unnecessary verbosity or structure
