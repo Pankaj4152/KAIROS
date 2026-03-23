@@ -16,12 +16,20 @@ Your always-on interface. Works over mobile data, in noisy environments, or when
 - **Long response splitting** — splits at paragraph boundaries, never mid-sentence
 - **Proactive push** — morning briefings, reminders, and scheduled alerts land here
 
+<p align="center">
+  <img src="images/telegram_bot_start.png" alt="Telegram bot" width="400">
+</p>
+
 ### Web UI
 Browser-based chat at `http://localhost:8000`.
 
 - **Streaming** — tokens arrive as they're generated via WebSocket
 - **Any device** — works from phone, tablet, or laptop on your LAN
 - **Remote access** — use [Tailscale](https://tailscale.com) for secure access from anywhere
+
+<p align="center">
+  <img src="images/home.png" alt="Kairos WebUI" width="600">
+</p>
 
 ### Voice *(coming soon)*
 - Wake word → speak → hear the response
@@ -46,6 +54,14 @@ Add, view, and complete tasks with priority and due dates.
 
 Tasks are stored in SQLite with fields: title, due_date, status, project, priority.
 When you ask about work or todos, open tasks are automatically injected into the prompt context.
+
+<p align="center">
+  <img src="images/add_task.png" alt="Adding a task" width="600">
+</p>
+
+<p align="center">
+  <img src="images/ask_tasks.png" alt="Querying tasks" width="600">
+</p>
 
 ---
 
@@ -107,6 +123,10 @@ Real-time web search with pluggable backends.
 ```
 
 Switch backends in `.env` — DuckDuckGo (free, default), Brave, Tavily, or Serper. See [Architecture → Tool System](ARCHITECTURE.md#tool-system) for details.
+
+<p align="center">
+  <img src="images/chat_search.png" alt="Web search results" width="600">
+</p>
 
 ---
 

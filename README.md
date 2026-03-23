@@ -17,6 +17,48 @@ Listens for a wake word at home, accepts text via Telegram when you're out, acce
 - **Three-tier model routing** — free local model for simple things, cloud only when needed
 - **Proactive** — daily briefings, reminders, scheduled tasks without being asked
 
+---
+
+## Demo
+
+### WebUI — Chat with Kairos
+
+<p align="center">
+  <img src="docs/images/chat_greeting.png" alt="Kairos greeting" width="700">
+</p>
+
+### Task Management
+
+<p align="center">
+  <img src="docs/images/add_task.png" alt="Adding a task" width="700">
+</p>
+
+<p align="center">
+  <img src="docs/images/ask_tasks.png" alt="Querying tasks" width="700">
+</p>
+
+### Web Search
+
+<p align="center">
+  <img src="docs/images/chat_search.png" alt="Web search results" width="700">
+</p>
+
+### Telegram Bot
+
+<p align="center">
+  <img src="docs/images/telegram_bot_start.png" alt="Telegram bot" width="400">
+</p>
+
+### Terminal Startup
+
+<p align="center">
+  <img src="docs/images/terminal.png" alt="Kairos startup logs" width="700">
+</p>
+
+> See more in the **[User Guide](docs/GUIDE.md)**.
+
+---
+
 ## What it is not
 
 - Not a multi-user product — built for one person

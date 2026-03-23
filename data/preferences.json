@@ -7,36 +7,47 @@
       "Branch": "Computer Science",
       "stage": "3rd_year"
     },
-
     "background": {
-      "focus_areas": ["AI/ML", "systems", "product building"],
-      "current_skills": ["python", "ml_basics", "system_design_learning"],
+      "focus_areas": [
+        "AI/ML",
+        "systems",
+        "product building"
+      ],
+      "current_skills": [
+        "python",
+        "ml_basics",
+        "system_design_learning"
+      ],
       "experience_level": "intermediate"
     }
   },
-
   "preferences": {
     "communication": {
       "style": "concise_direct",
       "tone": "casual",
       "verbosity": "low",
-      "avoid": ["fluff", "repetition", "over_explanation"]
+      "avoid": [
+        "fluff",
+        "repetition",
+        "over_explanation"
+      ]
     },
-
     "thinking": {
-      "priority": ["systems", "execution", "practicality"],
+      "priority": [
+        "systems",
+        "execution",
+        "practicality"
+      ],
       "reasoning_style": "structured",
       "challenge_level": "high",
       "tolerance_for_theory": "low"
     },
-
     "execution": {
       "bias": "ship_fast",
       "overengineering_tolerance": "low",
       "decision_style": "pragmatic"
     }
   },
-
   "current_state": {
     "focus": [
       "Kairos_voice_agent",
@@ -46,25 +57,34 @@
       "hands_on_ml_projects",
       "karpathy_neural_net_lectures"
     ],
-
     "active_projects": [
       "Kairos",
       "personal_blog",
       "Andrej_Karpathy_neural_net_lectures"
     ],
-
     "learning": {
-      "dsa": { "frequency": "daily", "priority": "high" },
-      "ml": { "approach": "project_based_hands_on", "priority": "high" },
-      "neural_networks": { "source": "Andrej_Karpathy_playlist", "priority": "high" }
+      "dsa": {
+        "frequency": "daily",
+        "priority": "high"
+      },
+      "ml": {
+        "approach": "project_based_hands_on",
+        "priority": "high"
+      },
+      "neural_networks": {
+        "source": "Andrej_Karpathy_playlist",
+        "priority": "high"
+      }
     },
-
     "constraints": {
-      "time_split": ["internship", "learning", "building"],
+      "time_split": [
+        "internship",
+        "learning",
+        "building"
+      ],
       "priority": "high_output_with_limited_time"
     }
   },
-
   "goals": {
     "2026": {
       "primary": [
@@ -84,9 +104,9 @@
       "fix_sleep_cycle",
       "structured_day_routine",
       "body_and_mind_focus"
-    ]
+    ],
+    "Finish DSA revision": "high priority"
   },
-
   "behavior_rules": {
     "do": [
       "prioritize_actionable_outputs",
@@ -100,9 +120,14 @@
       "add_unnecessary_structure"
     ]
   },
-
   "metadata": {
     "version": "1.0",
     "last_updated": "2026-03-23T09:00:00Z"
+  },
+  "facts": {
+    "DSA revision": "needs to be finished by Friday",
+    "how to view tasks": "open the calendar app on your smartphone",
+    "DSA revision deadline": "Friday",
+    "OpenAI's plan": "to double its headcount by the end of 2026"
   }
 }
