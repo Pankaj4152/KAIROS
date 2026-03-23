@@ -6,10 +6,10 @@ model_list:
 
   - model_name: tier2
     litellm_params:
-      model: ollama/llama3:latest
-      api_base: http://localhost:11434
+      model: anthropic/claude-haiku-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
 
   - model_name: tier3
     litellm_params:
-      model: gemini/gemini-1.5-pro
-      api_key: os.environ/GEMINI_API_KEY
+      model: anthropic/claude-sonnet-4-5
+      api_key: os.environ/ANTHROPIC_API_KEY
