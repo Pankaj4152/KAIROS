@@ -71,7 +71,7 @@ Listens for a wake word at home, accepts text via Telegram when you're out, acce
 ## Quick Start
 
 ```bash
-git clone <your-repo>
+git clone https://github.com/Pankaj4152/KAIROS.git
 cd kairos
 pip install -r requirements.txt
 cp .env.example .env        # fill in your API keys
