@@ -25,6 +25,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 
 sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))  # Add project root for config module
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -66,16 +67,18 @@ async def morning_briefing():
             for e in events
         ) or "Nothing scheduled."
 
-        prompt = f"""You are Kairos, a personal AI assistant giving a morning briefing.
-Be concise and energetic. No markdown. Plain text only. 3-4 sentences max.
+        prompt = f"""
+            You are Kairos, a personal AI assistant giving a morning briefing.
+            Be concise and energetic. No markdown. Plain text only. 3-4 sentences max.
 
-Open tasks:
-{task_lines}
+            Open tasks:
+            {task_lines}
 
-Upcoming events:
-{event_lines}
+            Upcoming events:
+            {event_lines}
 
-Give a brief morning summary — what to focus on today and any events coming up."""
+            Give a brief morning summary — what to focus on today and any events coming up.
+            """
 
         llm     = LLMClient()
         message = await llm.complete(

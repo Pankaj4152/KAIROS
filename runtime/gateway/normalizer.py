@@ -18,10 +18,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Literal
-
-
-LOCAL_USER_ID = "local"
-
+from config.settings import LOCAL_USER_ID
 
 # ─── canonical event ──────────────────────────────────────────────────────────
 
@@ -30,7 +27,7 @@ class KairosEvent:
     channel:    Literal["voice", "telegram", "webui", "cron"]       # "voice" | "telegram" | "webui" | "cron"
     text:       str                                                 # transcribed or raw text
     user_id:    str                                                 # always the single user — you
-    session_id: str                                                     # uuid, persists within a conversation
+    session_id: str                                                 # uuid, persists within a conversation
     timestamp:  float                                               # unix time
     modality:   Literal["voice", "text"]                            # "voice" | "text"
     raw:        dict = field(default_factory=dict)                  # original payload, for debugging

@@ -42,10 +42,7 @@ from dataclasses import dataclass
 # Plain dict is fine — single user, single process.
 _sessions: dict[str, dict] = {}
 
-# A session with no activity for this long is considered expired.
-SESSION_TIMEOUT   = 60 * 60   # seconds before an inactive session expires
-PURGE_PROBABILITY = 0.02      # 2% chance of running cleanup on each resolve call
-
+from config.settings import SESSION_TIMEOUT, PURGE_PROBABILITY
 
 # ─── session record ───────────────────────────────────────────────────────────
 
@@ -90,6 +87,7 @@ def resolve_session(
         return _create_session(channel, user_id, session_id=f"cron-{uuid.uuid4()}")
 
     now = time.time()
+    expired_incoming = False
 
     # Occasional cleanup — keeps memory from growing unbounded
     if random.random() < PURGE_PROBABILITY:
@@ -107,6 +105,12 @@ def resolve_session(
         # NOTE: we do NOT reuse incoming_session_id here. A Telegram chat_id
         # that expired gets a new UUID — clean context window, same user memory.
         del _sessions[incoming_session_id]
+        expired_incoming = True
+
+    # First message for a channel-provided session hint (web tab id, chat id).
+    # Store it as-is so the next message with the same hint can resume.
+    if incoming_session_id and not expired_incoming:
+        return _create_session(channel, user_id, session_id=incoming_session_id)
 
     return _create_session(channel, user_id)
 

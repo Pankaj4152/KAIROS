@@ -126,6 +126,8 @@ kairos/
 ├── litellm/
 │   └── config.yaml             # model routing config
 │
+├── test/                       # unit & integration tests
+│
 ├── docs/                       # documentation
 ├── .env.example                # environment variable reference
 ├── requirements.txt
@@ -138,7 +140,7 @@ kairos/
 
 | Layer | Technology |
 |-------|------------|
-| Language | Python 3.11+ |
+| Language | Python 3.12 |
 | Async | asyncio throughout |
 | Voice pipeline | Pipecat, Deepgram, Cartesia, silero-vad, Porcupine |
 | LLM routing | LiteLLM proxy |

@@ -28,7 +28,7 @@ from dotenv import load_dotenv
 from telegram import Update
 from telegram.constants import ChatAction
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
-
+from config.settings import TELEGRAM_MAX_LENGTH, TYPING_REFRESH_SECS, MIN_MESSAGE_INTERVAL
 load_dotenv()
 
 from gateway.normalizer import normalize_telegram
@@ -36,9 +36,6 @@ from orchestrator.orchestrator import orchestrator
 
 logger = logging.getLogger(__name__)
 
-TELEGRAM_MAX_LENGTH  = 4096
-TYPING_REFRESH_SECS  = 4.0    # resend typing action every N seconds for long responses
-MIN_MESSAGE_INTERVAL = 1.0    # ignore duplicate/rapid messages within this window (seconds)
 
 
 class TelegramChannel:
