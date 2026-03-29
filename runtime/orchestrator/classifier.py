@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # Clamp classifier output to these sets — never trust raw model output blindly.
 # Unknown values are silently dropped, not passed downstream.
 VALID_DOMAINS = frozenset({"tasks", "events", "habits", "spending", "memory"})
-VALID_TOOLS   = frozenset({"web_search", "calendar_write", "send_message"})
+VALID_TOOLS   = frozenset({"web_search", "send_message"})
 VALID_INTENTS = frozenset({"question", "task", "reminder", "memory",
                            "chitchat", "search", "code"})
 
@@ -68,19 +68,18 @@ Return exactly this JSON shape:
 
 Rules for complexity and tier:
 - complexity 1, tier 1: trivial (greetings, time, simple facts, list my tasks)
-- complexity 2, tier 2: moderate (calendar queries, web search, task management)
+- complexity 2, tier 2: moderate (web search, task management)
 - complexity 3, tier 3: complex (reasoning, code writing, research, multi-step planning)
 
 Rules for domains (which memory stores to query — include only what is relevant):
 - "tasks"    — todos, work items, what to do
-- "events"   — calendar, meetings, schedule, today, tomorrow
+- "events"   — meetings, schedule, today, tomorrow
 - "habits"   — streaks, routines, daily check-ins
 - "spending" — money, expenses, budget, purchases
 - "memory"   — remember, recall, what did i say, earlier
 
 Rules for tools_needed (tools to invoke before the LLM response):
 - "web_search"     — current information, news, prices, weather
-- "calendar_write" — creating or editing a calendar event
 - "send_message"   — send a message to someone
 
 Examples:

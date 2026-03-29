@@ -194,11 +194,233 @@ class LLMClient:
             f"LiteLLM failed after {retries + 1} attempts (tier={tier}): {last_error}"
         )
 
+    async def complete_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        tier: int = 2,
+        timeout: float = COMPLETE_TIMEOUT,
+        retries: int = MAX_RETRIES,
+    ) -> dict:
+        """
+        Call the LLM with tool/function definitions and return structured response.
+
+        The LLM can choose to:
+          1. Call one or more tools
+          2. Return text without calling tools
+
+        Converts OpenAI function calling format to Anthropic-style content blocks
+        for compatibility with the orchestrator.
+
+        Args:
+            messages: standard OpenAI-format message list.
+            tools:    list of tool definitions with name, description, input_schema.
+            tier:     which model tier to use (default 2).
+            timeout:  per-attempt timeout in seconds.
+            retries:  max retry attempts after first failure (0 = no retry).
+
+        Returns:
+            Dict with "content" key containing list of blocks:
+              - {"type": "text", "text": "..."}
+              - {"type": "tool_use", "name": "...", "input": {...}, "id": "..."}
+        """
+        model = self._resolve_model(tier)
+        url   = f"{self.base_url}/chat/completions"
+        last_error: Exception | None = None
+
+        # Convert internal Anthropic-style messages to OpenAI-compatible messages.
+        openai_messages = self._to_openai_tool_messages(messages)
+
+        # Convert tool schemas to OpenAI function format
+        functions = [
+            {
+                "name": tool["name"],
+                "description": tool["description"],
+                "parameters": tool["input_schema"],
+            }
+            for tool in tools
+        ]
+
+        # Preferred payload for modern OpenAI-compatible tool calling.
+        tool_defs = [
+            {
+                "type": "function",
+                "function": fn,
+            }
+            for fn in functions
+        ]
+
+        for attempt in range(retries + 1):
+
+            if attempt > 0:
+                delay = RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                await asyncio.sleep(delay)
+
+            try:
+                # Try modern tools payload first; on 400 fall back to legacy
+                # functions payload for older backends.
+                request_payload = {
+                    "model": model,
+                    "messages": openai_messages,
+                    "stream": False,
+                    "tools": tool_defs,
+                    "tool_choice": "auto",
+                }
+                response = await self._client.post(url, json=request_payload, timeout=timeout)
+
+                if response.status_code == 400:
+                    legacy_payload = {
+                        "model": model,
+                        "messages": openai_messages,
+                        "stream": False,
+                        "functions": functions,
+                        "function_call": "auto",
+                    }
+                    response = await self._client.post(url, json=legacy_payload, timeout=timeout)
+
+                if 400 <= response.status_code < 500:
+                    detail = ""
+                    try:
+                        detail = response.text[:300]
+                    except Exception:
+                        detail = ""
+                    raise LLMError(
+                        f"LiteLLM HTTP {response.status_code} (tier={tier}) — check prompt/auth. {detail}"
+                    )
+
+                response.raise_for_status()
+                
+                # Convert OpenAI response to Anthropic format
+                return self._convert_to_anthropic_format(
+                    response.json()["choices"][0]["message"]
+                )
+
+            except LLMError:
+                raise
+
+            except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as e:
+                last_error = e
+                continue
+
+            except (KeyError, IndexError) as e:
+                raise LLMError(f"Unexpected LiteLLM response shape: {e}") from e
+
+        raise LLMError(
+            f"LiteLLM failed after {retries + 1} attempts (tier={tier}): {last_error}"
+        )
+
     async def aclose(self) -> None:
         """Release the HTTP connection pool. Call this on app shutdown."""
         await self._client.aclose()
 
     # ─── internal helpers ─────────────────────────────────────────────────────
+
+    def _convert_to_anthropic_format(self, message: dict) -> dict:
+        """
+        Convert OpenAI message format to Anthropic-style content blocks.
+
+        OpenAI format:
+            {"content": "...", "tool_calls": [...]}
+
+        Anthropic format:
+            {"content": [{"type": "text", "text": "..."}, {"type": "tool_use", ...}]}
+        """
+        content = []
+
+        # Add text content if present
+        if message.get("content"):
+            content.append({
+                "type": "text",
+                "text": message["content"],
+            })
+
+        # Convert function calls to tool_use blocks
+        for tool_call in message.get("tool_calls", []):
+            # Extract function name and arguments
+            func_name = tool_call["function"]["name"]
+            args_str = tool_call["function"]["arguments"]
+            
+            # Parse arguments (they come as JSON string)
+            try:
+                args = json.loads(args_str)
+            except (json.JSONDecodeError, TypeError):
+                args = {}
+
+            content.append({
+                "type": "tool_use",
+                "id": tool_call["id"],
+                "name": func_name,
+                "input": args,
+            })
+
+        return {"content": content}
+
+    def _to_openai_tool_messages(self, messages: list[dict]) -> list[dict]:
+        """
+        Convert internal Anthropic-style tool loop messages into OpenAI format.
+
+        Orchestrator stores tool turns like:
+            assistant: [{type:text}, {type:tool_use, ...}]
+            user:      [{type:tool_result, ...}]
+
+        LiteLLM / OpenAI expects:
+            assistant: {content: str|None, tool_calls:[...]}
+            tool:      {tool_call_id:..., content:...}
+        """
+        out: list[dict] = []
+
+        for msg in messages:
+            role = msg.get("role")
+            content = msg.get("content")
+
+            # Normal OpenAI-style messages pass through.
+            if isinstance(content, str) or content is None:
+                out.append({"role": role, "content": content})
+                continue
+
+            # Internal Anthropic-style block list.
+            if isinstance(content, list):
+                if role == "assistant":
+                    text_parts: list[str] = []
+                    tool_calls: list[dict] = []
+
+                    for block in content:
+                        if block.get("type") == "text":
+                            text_parts.append(block.get("text", ""))
+                        elif block.get("type") == "tool_use":
+                            tool_calls.append({
+                                "id": block.get("id", "tool_call"),
+                                "type": "function",
+                                "function": {
+                                    "name": block.get("name", ""),
+                                    "arguments": json.dumps(block.get("input", {})),
+                                },
+                            })
+
+                    assistant_msg = {
+                        "role": "assistant",
+                        "content": "".join(text_parts) if text_parts else None,
+                    }
+                    if tool_calls:
+                        assistant_msg["tool_calls"] = tool_calls
+                    out.append(assistant_msg)
+                    continue
+
+                if role == "user":
+                    # user tool_result blocks become tool-role messages.
+                    for block in content:
+                        if block.get("type") == "tool_result":
+                            out.append({
+                                "role": "tool",
+                                "tool_call_id": block.get("tool_use_id", ""),
+                                "content": block.get("content", ""),
+                            })
+                    continue
+
+            # Defensive fallback.
+            out.append({"role": role, "content": str(content)})
+
+        return out
 
     def _resolve_model(self, tier: int) -> str:
         """

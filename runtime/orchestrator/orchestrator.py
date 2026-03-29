@@ -7,15 +7,23 @@ Nothing else in the system should call the LLM directly.
 Request flow:
     1. Classify  — Classifier decides tier, domains, intent (tier-1 local model)
     2. Build     — Assemble system prompt + context + history + user message
-    3. Stream    — Yield response tokens as they arrive from LiteLLM
-    4. Writeback — embed + session append + fact extraction (fire-and-forget)
+    3. Tool loop — LLM may request tool calls; execute and feed results back
+    4. Stream    — Yield final response tokens as they arrive from LiteLLM
+    5. Writeback — embed + session append + fact extraction (fire-and-forget)
 
-Memory domains the context assembler handles:
-    tasks, events, habits, spending → sqlite_store.py (structured SQL)
-    memory                          → vector_store.py (semantic search)
+Two tool patterns:
+    Pre-LLM tools  — web_search: classifier flags these,
+                     results injected as context BEFORE the LLM call.
+                     LLM sees the data already in the prompt.
+
+    Agentic tools  — web_search etc:
+                     LLM sees tool schemas, decides mid-response to call one,
+                     we execute it, feed result back, LLM gives final answer.
+                     This is the standard tool-use / function-calling loop.
 """
 
 import asyncio
+import json
 import logging
 import os
 from typing import AsyncGenerator
@@ -36,15 +44,23 @@ from memory.sqlite_store import (
     fetch_spending_summary,
 )
 from orchestrator.classifier import Classifier
-
 from tools.executor import execute
+from tools.registry import get_tool_schemas
 
 logger = logging.getLogger(__name__)
+
+# Tools the classifier pre-fetches before the LLM call.
+# Everything else goes through the agentic loop.
+PRE_LLM_TOOLS = {"web_search"}
+
+# Max tool-call rounds before we stop looping.
+# Prevents infinite loops if the LLM keeps requesting tools.
+MAX_TOOL_ROUNDS = 5
 
 
 class Orchestrator:
     """
-    Routes every KairosEvent through classify → build → stream → writeback.
+    Routes every KairosEvent through classify → build → tool loop → stream → writeback.
 
     Instantiate once as a module-level singleton.
     Inject a custom LLMClient in tests to avoid real API calls.
@@ -63,11 +79,6 @@ class Orchestrator:
     # ─── startup ──────────────────────────────────────────────────────────────
 
     async def startup(self) -> None:
-        """
-        Load profile.md from disk once at app startup.
-        Cached in self._profile — all subsequent calls are instant no-ops.
-        Never call this mid-request.
-        """
         if self._profile is not None:
             return
         path = os.path.join(self.data_dir, "profile.md")
@@ -81,16 +92,6 @@ class Orchestrator:
     # ─── context assembly ─────────────────────────────────────────────────────
 
     async def _build_context(self, domains: list[str], query_text: str) -> str:
-        """
-        Fetch ONLY the domains the classifier flagged, in parallel.
-
-        query_text is passed to vector search — it's the user's message,
-        used to find semantically relevant past turns.
-
-        Why parallel:
-            Each domain fetch is independent I/O. asyncio.gather() runs
-            them all at once — total time = slowest single fetch, not sum.
-        """
         coros = []
 
         if "tasks" in domains:
@@ -102,21 +103,16 @@ class Orchestrator:
         if "spending" in domains:
             coros.append(self._fetch_spending_block())
         if "memory" in domains:
-            # Vector search — finds semantically similar past turns
             coros.append(search_as_context(query_text, top_k=5))
 
         if not coros:
             return ""
 
         results = await asyncio.gather(*coros, return_exceptions=True)
-
-        # Filter out None, empty strings, and exceptions
-        # Exceptions are already logged inside each fetch method
         blocks = [r for r in results if isinstance(r, str) and r.strip()]
         return "\n\n".join(blocks)
 
     async def _fetch_tasks_block(self) -> str | None:
-        """Open tasks formatted as a prompt context block."""
         try:
             tasks = await fetch_open_tasks()
             if not tasks:
@@ -132,7 +128,6 @@ class Orchestrator:
             return None
 
     async def _fetch_events_block(self) -> str | None:
-        """Upcoming events formatted as a prompt context block."""
         try:
             events = await fetch_upcoming_events(limit=3)
             if not events:
@@ -147,7 +142,6 @@ class Orchestrator:
             return None
 
     async def _fetch_habits_block(self) -> str | None:
-        """Habits with streak info formatted as a prompt context block."""
         try:
             habits = await fetch_habits()
             if not habits:
@@ -163,7 +157,6 @@ class Orchestrator:
             return None
 
     async def _fetch_spending_block(self) -> str | None:
-        """Spending summary formatted as a prompt context block."""
         try:
             rows = await fetch_spending_summary()
             if not rows:
@@ -177,41 +170,31 @@ class Orchestrator:
             logger.warning("fetch_spending failed: %s", e)
             return None
 
+    # ─── pre-LLM tools ────────────────────────────────────────────────────────
 
-    # tools execution ──────────────────────────────────────────────────────
-    async def _run_tools(self, tools_needed: list[str], query: str) -> str:
+    async def _run_pre_llm_tools(self, tools_needed: list[str], query: str) -> str:
         """
-        Execute all tools the classifier flagged, in parallel.
-        Returns a formatted block ready for prompt injection.
+        Run tools that fetch context BEFORE the LLM call.
+        Results get injected into the system prompt as context.
 
-        Why run tools before the LLM call:
-            The LLM needs the search results IN the prompt to answer correctly.
-            If we called tools after, the response would already be generated.
-            Tool results are context, not post-processing.
-
-        Why parallel:
-            If classifier returns ["web_search", "calendar_read"], both
-            can run at the same time. No reason to wait for one before starting
-            the other — they're independent I/O operations.
+        Only PRE_LLM_TOOLS are handled here. Agentic tools (write/update/delete)
+        are handled in the tool loop after the first LLM call.
         """
-        if not tools_needed:
+        pre_tools = [t for t in tools_needed if t in PRE_LLM_TOOLS]
+        if not pre_tools:
             return ""
 
-        # Map tool name to the input it needs
-        # web_search gets the user's query directly
-        # Future tools will have their own input logic
         tool_inputs = {
-            "web_search": {"query": query},
+            "web_search":          {"query": query}
         }
 
-        coros = []
-        names = []
-        for tool_name in tools_needed:
+        coros, names = [], []
+        for tool_name in pre_tools:
             if tool_name in tool_inputs:
                 coros.append(execute(tool_name, tool_inputs[tool_name]))
                 names.append(tool_name)
             else:
-                logger.warning("No input mapping for tool: %s", tool_name)
+                logger.warning("No input mapping for pre-LLM tool: %s", tool_name)
 
         if not coros:
             return ""
@@ -221,21 +204,115 @@ class Orchestrator:
         blocks = []
         for name, result in zip(names, results):
             if isinstance(result, Exception):
-                logger.warning("Tool %s raised: %s", name, result)
+                logger.warning("Pre-LLM tool %s raised: %s", name, result)
             elif isinstance(result, str) and result.strip():
                 blocks.append(result)
 
         return "\n\n".join(blocks)
+
+    # ─── agentic tool loop ────────────────────────────────────────────────────
+
+    async def _run_tool_loop(
+        self,
+        messages: list[dict],
+        tier: int,
+    ) -> tuple[list[dict], str]:
+        """
+        Agentic tool-use loop.
+
+        How it works:
+            1. Call LLM with tool schemas attached
+            2. If LLM returns a tool_use block, execute the tool
+            3. Append tool result to messages as a tool_result block
+            4. Call LLM again with updated messages
+            5. Repeat until LLM returns plain text (no more tool calls)
+            6. Return final messages + final text response
+
+    
+
+        Without this loop, the LLM would just describe what it would do
+        but never actually do it.
+        """
+        tool_schemas = get_tool_schemas()
+
+        # Filter to only agentic tools — pre-LLM tools already ran
+        agentic_schemas = [
+            s for s in tool_schemas
+            if s["name"] not in PRE_LLM_TOOLS
+        ]
+
+        # If no agentic tools are available, skip loop entirely
+        if not agentic_schemas:
+            final_text = await self.llm.complete(messages, tier=tier)
+            return messages, final_text
+
+        current_messages = list(messages)
+        final_text = ""
+
+        for round_num in range(MAX_TOOL_ROUNDS):
+            # Call LLM — non-streaming for tool rounds, stream only on final
+            response = await self.llm.complete_with_tools(
+                messages=current_messages,
+                tools=agentic_schemas,
+                tier=tier,
+            )
+
+            # Check if LLM wants to call a tool
+            tool_calls = [
+                block for block in response.get("content", [])
+                if block.get("type") == "tool_use"
+            ]
+
+            if not tool_calls:
+                # No tool calls — LLM gave a final text response
+                final_text = _extract_text(response)
+                break
+
+            # Append LLM's tool-calling response to messages
+            current_messages.append({
+                "role": "assistant",
+                "content": response["content"],
+            })
+
+            # Execute each tool call and collect results
+            tool_results = []
+            for call in tool_calls:
+                tool_name  = call["name"]
+                tool_input = call["input"]
+                tool_id    = call["id"]
+
+                logger.info(
+                    "Agentic tool call [round %d]: %s inputs=%s",
+                    round_num + 1, tool_name, list(tool_input.keys()),
+                )
+
+                result = await execute(tool_name, tool_input)
+
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": tool_id,
+                    "content":     result,
+                })
+
+            # Feed tool results back to LLM as a user message
+            # (Anthropic API requires tool results in a user turn)
+            current_messages.append({
+                "role":    "user",
+                "content": tool_results,
+            })
+
+            logger.debug("Tool loop round %d complete, looping back", round_num + 1)
+
+        else:
+            # Hit MAX_TOOL_ROUNDS without getting a final response
+            logger.warning("Tool loop hit MAX_TOOL_ROUNDS=%d, forcing stop", MAX_TOOL_ROUNDS)
+            final_text = "I ran into an issue completing that request. Please try again."
+
+        return current_messages, final_text
+
     # ─── prompt assembly ──────────────────────────────────────────────────────
 
     def _build_system_prompt(self, context: str) -> str:
-        """
-        Combine profile + context into a single system message.
-
-        Single system message is safer than multiple — some providers
-        handle multiple system messages inconsistently.
-        Context is appended only when there is something to inject.
-        """
         profile = self._profile or "You are Kairos, a personal AI assistant."
 
         base = f"""You are Kairos, a personal AI assistant.
@@ -259,18 +336,11 @@ Guidelines:
         tools_needed: list[str],
     ) -> list[dict]:
         """
-        Assemble the full messages list for the LLM call.
-
-        Order:
-            system  — profile + structured context + tool results
-            history — last 8 turns
-            user    — the actual message
-
-        context fetch, tool execution, and history load all run in parallel —
-        all three are independent I/O, none depends on the others.
+        Assemble the full messages list for the first LLM call.
+        Context fetch, pre-LLM tools, and history all run in parallel.
         """
         context_task = self._build_context(domains, event.text)
-        tools_task   = self._run_tools(tools_needed, event.text)
+        tools_task   = self._run_pre_llm_tools(tools_needed, event.text)
         history_task = get_history(event.session_id, last_n=8)
 
         context, tool_results, history = await asyncio.gather(
@@ -279,7 +349,6 @@ Guidelines:
             history_task,
         )
 
-        # Combine context blocks
         combined = "\n\n".join(
             block for block in [context, tool_results] if block.strip()
         )
@@ -297,15 +366,13 @@ Guidelines:
         Process a KairosEvent end to end and stream the response.
 
         Flow:
-            1. Classify  — tier, domains, intent via local phi-3-mini
-            2. Build     — system + context + history assembled in parallel
-            3. Stream    — yield tokens as they arrive from LiteLLM
-            4. Writeback — embed + session + facts in background (non-blocking)
-
-        Channels iterate this generator directly. They never need to know
-        about tiers, domains, memory, or tools — that's all here.
+            1. Classify  — tier, domains, tools via local phi-3-mini
+            2. Build     — system + context + pre-LLM tools + history (parallel)
+            3. Tool loop — agentic tools: LLM calls tools, we execute, loop back
+            4. Stream    — yield final response tokens
+            5. Writeback — embed + session + facts in background
         """
-        await self.startup()  # no-op after first call
+        await self.startup()
 
         # Step 1 — classify
         classification = await self.classifier.classify(event.text)
@@ -318,28 +385,59 @@ Guidelines:
             event.text[:40], tier, domains, tools_needed,
         )
 
-        
-        # Step 2 — build prompt
+        # Step 2 — build initial messages
         messages = await self._build_messages(event, domains, tools_needed)
-        # Step 3 — stream response
-        full_response: list[str] = []
-        async for token in self.llm.stream(messages, tier=tier):
-            full_response.append(token)
+
+        # Step 3 — agentic tool loop
+        # This handles the case where the LLM needs to call a tool to complete
+        # If no agentic tools are needed, this is essentially a single LLM call.
+        _, final_text = await self._run_tool_loop(messages, tier)
+
+        # Step 4 — stream the final response token by token
+        # We have the full text from the tool loop; stream it character by character
+        # so channels (voice, WebUI) get the same streaming interface they expect.
+        for token in _stream_text(final_text):
             yield token
 
-        # Step 4 — writeback: embed + session append + fact extraction
-        # Fire-and-forget — user already has their response
+        # Step 5 — writeback
         asyncio.create_task(
             run_writeback(
                 session_id=event.session_id,
                 user_text=event.text,
-                response_text="".join(full_response),
+                response_text=final_text,
                 channel=event.channel,
                 tier=tier,
-                llm=self.llm,         # shared client — one connection pool
+                llm=self.llm,
                 data_dir=self.data_dir,
             )
         )
+
+
+# ─── helpers ──────────────────────────────────────────────────────────────────
+
+def _today() -> str:
+    """Today's date in YYYY-MM-DD format."""
+    from datetime import date
+    return date.today().strftime("%Y-%m-%d")
+
+
+def _extract_text(response: dict) -> str:
+    """Pull plain text out of an Anthropic-style response dict."""
+    parts = []
+    for block in response.get("content", []):
+        if block.get("type") == "text":
+            parts.append(block["text"])
+    return "".join(parts)
+
+
+def _stream_text(text: str, chunk_size: int = 10):
+    """
+    Yield text in small chunks to simulate streaming.
+    Channels expect a generator — this gives them one even when we
+    already have the full response from the tool loop.
+    """
+    for i in range(0, len(text), chunk_size):
+        yield text[i:i + chunk_size]
 
 
 # ─── singleton ────────────────────────────────────────────────────────────────
