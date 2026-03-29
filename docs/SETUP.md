@@ -21,7 +21,7 @@
 ## 1. Clone and Install
 
 ```bash
-git clone <your-repo>
+git clone https://github.com/Pankaj4152/KAIROS.git
 cd kairos
 pip install -r requirements.txt
 ```
