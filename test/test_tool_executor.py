@@ -1,88 +1,184 @@
-"""
-Tests for runtime/tools/executor.py + registry.py
-
-Covers:
-  - Unknown tool name → error string
-  - Missing required field → validation error
-  - Extra field (additionalProperties: false) → validation error
-  - Valid input → calls handler, returns result
-  - Handler exception → error string (no crash)
-"""
+"""Tests for runtime/tools/executor.py."""
 
 import asyncio
-import logging
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
-logger = logging.getLogger(__name__)
-
 
 def run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    """Run async test helpers without requiring pytest-asyncio."""
+    return asyncio.run(coro)
 
 
-class TestToolExecutor:
-    def test_unknown_tool_returns_error(self):
-        from tools.executor import execute
-        result = run(execute("fly_drone", {"target": "moon"}))
-        logger.info("Unknown tool result: %s", result)
-        assert "not available" in result.lower() or "error" in result.lower()
-
-    def test_missing_required_field(self):
-        from tools.executor import execute
-        result = run(execute("web_search", {}))  # missing "query"
-        logger.info("Missing field result: %s", result)
-        assert "error" in result.lower()
-
-    def test_extra_field_rejected(self):
-        from tools.executor import execute
-        result = run(execute("web_search", {"query": "test", "evil_param": "hack"}))
-        logger.info("Extra field result: %s", result)
-        assert "error" in result.lower()
-
-    def test_valid_input_calls_handler(self):
-        from tools.executor import execute
-        from tools import registry
-
-        mock_handler = AsyncMock(return_value="search results here")
-        original = registry.REGISTRY["web_search"]["handler"]
-        registry.REGISTRY["web_search"]["handler"] = mock_handler
-
-        try:
-            result = run(execute("web_search", {"query": "AI news"}))
-            logger.info("Valid call result: %s", result)
-            assert "search results here" in result
-            mock_handler.assert_called_once_with(query="AI news")
-        finally:
-            registry.REGISTRY["web_search"]["handler"] = original
-
-    def test_handler_exception_returns_error(self):
-        from tools.executor import execute
-        from tools import registry
-
-        mock_handler = AsyncMock(side_effect=RuntimeError("API timeout"))
-        original = registry.REGISTRY["web_search"]["handler"]
-        registry.REGISTRY["web_search"]["handler"] = mock_handler
-
-        try:
-            result = run(execute("web_search", {"query": "test"}))
-            logger.info("Handler exception result: %s", result)
-            assert "error" in result.lower()
-            assert "API timeout" in result
-        finally:
-            registry.REGISTRY["web_search"]["handler"] = original
+def _sample_schema(required=True):
+    schema = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "minLength": 1},
+        },
+        "additionalProperties": False,
+    }
+    if required:
+        schema["required"] = ["query"]
+    return schema
 
 
-class TestRegistry:
-    def test_web_search_registered(self):
-        from tools.registry import REGISTRY
-        assert "web_search" in REGISTRY
-        logger.info("Registered tools: %s", list(REGISTRY.keys()))
+def test_unknown_tool_returns_not_available():
+    from tools import executor
 
-    def test_schema_has_required_query(self):
-        from tools.registry import REGISTRY
-        schema = REGISTRY["web_search"]["schema"]
-        assert "query" in schema["properties"]
-        assert "query" in schema["required"]
-        logger.info("web_search schema validated ✓")
+    result = run(executor.execute("does_not_exist", {"query": "x"}))
+    assert "not available" in result.lower()
+
+
+def test_disabled_tool_rejected(monkeypatch):
+    from tools import executor
+
+    fake_registry = {
+        "web_search": {
+            "enabled": False,
+            "schema": _sample_schema(),
+            "handler": lambda: (lambda **kwargs: "ok"),
+        }
+    }
+    monkeypatch.setattr(executor, "REGISTRY", fake_registry)
+    monkeypatch.setattr(executor, "get_eligibility", lambda: {"web_search": False})
+
+    result = run(executor.execute("web_search", {"query": "x"}))
+    assert "disabled" in result.lower()
+
+
+def test_ineligible_tool_rejected(monkeypatch):
+    from tools import executor
+
+    fake_registry = {
+        "web_search": {
+            "enabled": True,
+            "schema": _sample_schema(),
+            "handler": lambda: (lambda **kwargs: "ok"),
+        }
+    }
+    monkeypatch.setattr(executor, "REGISTRY", fake_registry)
+    monkeypatch.setattr(executor, "get_eligibility", lambda: {"web_search": False})
+
+    result = run(executor.execute("web_search", {"query": "x"}))
+    assert "not configured" in result.lower()
+
+
+def test_input_validation_failure(monkeypatch):
+    from tools import executor
+
+    fake_registry = {
+        "web_search": {
+            "enabled": True,
+            "schema": _sample_schema(required=True),
+            "handler": lambda: (lambda **kwargs: "ok"),
+        }
+    }
+    monkeypatch.setattr(executor, "REGISTRY", fake_registry)
+    monkeypatch.setattr(executor, "get_eligibility", lambda: {"web_search": True})
+
+    result = run(executor.execute("web_search", {}))
+    assert "invalid input" in result.lower()
+
+
+def test_loader_failure_returns_error(monkeypatch):
+    from tools import executor
+
+    def broken_loader():
+        raise RuntimeError("import failure")
+
+    fake_registry = {
+        "web_search": {
+            "enabled": True,
+            "schema": _sample_schema(),
+            "handler": broken_loader,
+        }
+    }
+    monkeypatch.setattr(executor, "REGISTRY", fake_registry)
+    monkeypatch.setattr(executor, "get_eligibility", lambda: {"web_search": True})
+
+    result = run(executor.execute("web_search", {"query": "x"}))
+    assert "could not load tool" in result.lower()
+
+
+def test_async_handler_success(monkeypatch):
+    from tools import executor
+
+    handler = AsyncMock(return_value="results")
+    fake_registry = {
+        "web_search": {
+            "enabled": True,
+            "schema": _sample_schema(),
+            "handler": lambda: handler,
+        }
+    }
+    monkeypatch.setattr(executor, "REGISTRY", fake_registry)
+    monkeypatch.setattr(executor, "get_eligibility", lambda: {"web_search": True})
+
+    result = run(executor.execute("web_search", {"query": "ai"}))
+    assert result == "results"
+    handler.assert_awaited_once_with(query="ai")
+
+
+def test_sync_handler_success(monkeypatch):
+    from tools import executor
+
+    def sync_handler(query):
+        return f"sync:{query}"
+
+    fake_registry = {
+        "web_search": {
+            "enabled": True,
+            "schema": _sample_schema(),
+            "handler": lambda: sync_handler,
+        }
+    }
+    monkeypatch.setattr(executor, "REGISTRY", fake_registry)
+    monkeypatch.setattr(executor, "get_eligibility", lambda: {"web_search": True})
+
+    result = run(executor.execute("web_search", {"query": "ai"}))
+    assert result == "sync:ai"
+
+
+def test_timeout_returns_error(monkeypatch):
+    from tools import executor
+
+    async def slow_handler(query):
+        await asyncio.sleep(0.05)
+        return query
+
+    fake_registry = {
+        "web_search": {
+            "enabled": True,
+            "schema": _sample_schema(),
+            "handler": lambda: slow_handler,
+        }
+    }
+    monkeypatch.setattr(executor, "REGISTRY", fake_registry)
+    monkeypatch.setattr(executor, "get_eligibility", lambda: {"web_search": True})
+    monkeypatch.setattr(executor, "TOOL_TIMEOUT_SECONDS", 0.01)
+
+    result = run(executor.execute("web_search", {"query": "ai"}))
+    assert "timed out" in result.lower()
+
+
+def test_handler_exception_returns_error(monkeypatch):
+    from tools import executor
+
+    async def bad_handler(query):
+        raise RuntimeError("boom")
+
+    fake_registry = {
+        "web_search": {
+            "enabled": True,
+            "schema": _sample_schema(),
+            "handler": lambda: bad_handler,
+        }
+    }
+    monkeypatch.setattr(executor, "REGISTRY", fake_registry)
+    monkeypatch.setattr(executor, "get_eligibility", lambda: {"web_search": True})
+
+    result = run(executor.execute("web_search", {"query": "ai"}))
+    assert "error running" in result.lower()
+    assert "boom" in result.lower()

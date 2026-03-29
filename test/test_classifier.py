@@ -32,7 +32,7 @@ def _make_classifier(response_text=None):
 
 
 def run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 # ── _parse tests ──────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ Covers:
   - search_as_context filters high-distance results
 """
 
+import asyncio
 import logging
 import math
 import os
@@ -106,13 +107,12 @@ class TestVectorStoreInit:
 class TestSearchAsContext:
     def test_empty_results_returns_empty_string(self, monkeypatch):
         """When no embeddings exist, search_as_context returns ''."""
-        import asyncio
         from unittest.mock import AsyncMock
 
         monkeypatch.setattr("memory.vector_store.search", AsyncMock(return_value=[]))
 
         from memory.vector_store import search_as_context
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             search_as_context("test query")
         )
         logger.info("Empty search result: %r", result)
@@ -120,7 +120,6 @@ class TestSearchAsContext:
 
     def test_filters_high_distance_results(self, monkeypatch):
         """Results with distance > 0.5 are excluded."""
-        import asyncio
         from unittest.mock import AsyncMock
 
         mock_results = [
@@ -130,7 +129,7 @@ class TestSearchAsContext:
         monkeypatch.setattr("memory.vector_store.search", AsyncMock(return_value=mock_results))
 
         from memory.vector_store import search_as_context
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             search_as_context("test query")
         )
         logger.info("Filtered result: %s", result[:100])
