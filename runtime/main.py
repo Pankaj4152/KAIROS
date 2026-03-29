@@ -30,10 +30,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))  # Add project ro
 from dotenv import load_dotenv
 load_dotenv()
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(name)-20s  %(levelname)s  %(message)s",
-)
+from config.logging_config import setup_logging
+setup_logging()
 logger = logging.getLogger("kairos")
 
 async def morning_briefing():

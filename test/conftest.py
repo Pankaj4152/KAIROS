@@ -7,7 +7,6 @@ Sets up:
   - Reusable fixtures: tmp data dirs, in-memory DBs, mock LLM client
 """
 
-import logging
 import os
 import sys
 import tempfile
@@ -15,18 +14,17 @@ import tempfile
 import pytest
 
 # ── path setup ────────────────────────────────────────────────────────────────
-# Add runtime/ to sys.path so all imports match production code.
-RUNTIME_DIR = os.path.join(os.path.dirname(__file__), "..", "runtime")
-sys.path.insert(0, os.path.abspath(RUNTIME_DIR))
+# Add runtime/ and project root to sys.path so all imports match production code.
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+RUNTIME_DIR = os.path.join(PROJECT_ROOT, "runtime")
+sys.path.insert(0, RUNTIME_DIR)
+sys.path.insert(0, PROJECT_ROOT)
 
 
 # ── logging ───────────────────────────────────────────────────────────────────
 # Every test gets timestamped DEBUG output — invaluable when debugging failures.
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s | %(levelname)-7s | %(name)-25s | %(message)s",
-    datefmt="%H:%M:%S",
-)
+from config.logging_config import setup_logging
+setup_logging(level_override="DEBUG")
 
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
