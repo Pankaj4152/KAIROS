@@ -354,6 +354,38 @@ class LLMClient:
         """Release the HTTP connection pool. Call this on app shutdown."""
         await self._client.aclose()
 
+    async def warmup(self, tiers: list[int] | None = None) -> None:
+        """
+        Send a trivial prompt to local models so Ollama loads them into memory.
+
+        Call once during startup. Without this, the first real request pays
+        a 5-15s cold-start penalty while Ollama loads model weights.
+
+        Only warms local tiers (1, 2) by default. Cloud tiers (3) are skipped
+        — they don't benefit from warm-up.
+
+        Args:
+            tiers: which tiers to warm. Defaults to [1, 2] (local Ollama models).
+        """
+        warm_tiers = tiers or [1, 2]
+        warmup_msg = [{"role": "user", "content": "hi"}]
+
+        for tier in warm_tiers:
+            model = self._resolve_model(tier)
+            t0 = time.perf_counter()
+            try:
+                await self.complete(warmup_msg, tier=tier, timeout=30.0, retries=0)
+                logger.info(
+                    "Warmed up model=%s tier=%d (%.2fs)",
+                    model, tier, time.perf_counter() - t0,
+                )
+            except Exception as e:
+                # Non-fatal — model will load on first real request instead
+                logger.warning(
+                    "Warmup failed for model=%s tier=%d (%.2fs): %s",
+                    model, tier, time.perf_counter() - t0, e,
+                )
+
     # ─── internal helpers ─────────────────────────────────────────────────────
 
     def _convert_to_anthropic_format(self, message: dict) -> dict:

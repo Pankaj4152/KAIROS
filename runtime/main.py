@@ -125,6 +125,11 @@ async def main() -> None:
     await orchestrator.startup()
     logger.info("Orchestrator ready")
 
+    # 5. Warm up local Ollama models — forces phi + llama3 into memory
+    #    so the first real request doesn't pay a cold-start penalty
+    await orchestrator.llm.warmup()
+    logger.info("LLM models warmed up")
+
     # Scheduler — morning briefing
     BRIEFING_HOUR   = int(os.getenv("BRIEFING_HOUR", "7"))
     BRIEFING_MINUTE = int(os.getenv("BRIEFING_MINUTE", "30"))
