@@ -46,7 +46,14 @@
       "bias": "ship_fast",
       "overengineering_tolerance": "low",
       "decision_style": "pragmatic"
-    }
+    },
+    "Tesla's focus these days is on scaling up production...": "scaling up production of their electric vehicles and solar panels.",
+    "What is Artificial Intelligence (AI)": "Artificial Intelligence (AI) refers to the simulation of human intelligence in machines that are programmed to think like humans and mimic their actions.",
+    "Interests": "AI",
+    "more": "Yes",
+    "I am an AI language model": "AI",
+    "How can I be of assistance?": "You can ask me to perform various tasks such as providing information on a topic, answering specific questions, or performing calculations. You can also tell me your preferences and I will try to fulfill them within my capabilities.",
+    "aiml": "to be helpful and informative"
   },
   "current_state": {
     "focus": [
@@ -105,7 +112,8 @@
       "structured_day_routine",
       "body_and_mind_focus"
     ],
-    "Finish DSA revision": "high priority"
+    "Finish DSA revision": "high priority",
+    "answer": "It will be ready in a few days."
   },
   "behavior_rules": {
     "do": [
@@ -128,6 +136,18 @@
     "DSA revision": "needs to be finished by Friday",
     "how to view tasks": "open the calendar app on your smartphone",
     "DSA revision deadline": "Friday",
-    "OpenAI's plan": "to double its headcount by the end of 2026"
+    "OpenAI's plan": "to double its headcount by the end of 2026",
+    "silver rate": "₹227-230 per gram",
+    "2+2+3": "7",
+    "User asked about price of gold today": "",
+    "price of silver": "22.35 USD per ounce",
+    "birthday": "tomorrow",
+    "price of tesla shares today": "$365.44",
+    "price": "$361.83",
+    "founding year": "2002",
+    "founder": "Elon Musk",
+    "what AI stands for": "Artificial Intelligence",
+    "What is the time?": "12:00",
+    "The Bermuda Triangle refers to an area in the western part of the North Atlantic Ocean where several mysterious disappearances have occurred over the years.": "The Bermuda Triangle refers to an area in the western part of the North Atlantic Ocean where several mysterious disappearances have occurred over the years."
   }
 }

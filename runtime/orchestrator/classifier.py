@@ -65,14 +65,15 @@ VALID_INTENTS = frozenset({"question", "task", "reminder", "memory",
 
 # ─── defaults ─────────────────────────────────────────────────────────────────
 
-# Returned on any classifier failure. tier=2 is the safe middle ground:
-# fast enough for voice, capable enough for most requests.
+# Returned on any classifier failure. tier=1 is the safe default:
+# if the classifier can't even parse the input, it's likely simple enough
+# for the local model. Truly complex queries produce parseable JSON.
 DEFAULT_RESULT: dict = {
     "intent":       "question",
-    "complexity":   2,
+    "complexity":   1,
     "domains":      [],
     "tools_needed": [],
-    "tier":         2,
+    "tier":         1,
 }
 
 

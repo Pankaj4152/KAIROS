@@ -11,7 +11,7 @@ PURGE_PROBABILITY = 0.02      # 2% chance of running cleanup on each resolve cal
 
 # Telegram
 TELEGRAM_MAX_LENGTH = 4096  # Telegram's message character limit
-TYPING_REFRESH_SECS = 4     # how often to refresh Telegram typing indicators (must be <5s)
+TYPING_REFRESH_SECS = 2     # how often to refresh Telegram typing indicators (must be <5s)
 MIN_MESSAGE_INTERVAL = 1.0  # ignore duplicate/rapid messages within this window (seconds)
 
 

@@ -217,23 +217,16 @@ class Orchestrator:
         self,
         messages: list[dict],
         tier: int,
-    ) -> tuple[list[dict], str]:
+    ) -> AsyncGenerator[str, None]:
         """
-        Agentic tool-use loop.
+        Agentic tool-use loop (Generator).
+        Yields strings (tokens) as they arrive from the LLM.
 
-        How it works:
-            1. Call LLM with tool schemas attached
-            2. If LLM returns a tool_use block, execute the tool
-            3. Append tool result to messages as a tool_result block
-            4. Call LLM again with updated messages
-            5. Repeat until LLM returns plain text (no more tool calls)
-            6. Return final messages + final text response
-
-    
-
-        Without this loop, the LLM would just describe what it would do
-        but never actually do it.
+        Final messages are available via current_messages (if needed).
         """
+        from llm.client import STREAM_TIMEOUT
+        response_timeout = STREAM_TIMEOUT
+
         tool_schemas = get_tool_schemas()
 
         # Filter to only agentic tools — pre-LLM tools already ran
@@ -242,37 +235,45 @@ class Orchestrator:
             if s["name"] not in PRE_LLM_TOOLS
         ]
 
-        # If no agentic tools are available, skip loop entirely
+        # If no agentic tools are available, real stream immediately
         if not agentic_schemas:
-            final_text = await self.llm.complete(messages, tier=tier)
-            return messages, final_text
+            async for token in self.llm.stream(
+                messages, tier=tier, timeout=response_timeout,
+            ):
+                yield token
+            return
 
         current_messages = list(messages)
         final_text = ""
 
+        # For tool rounds, we currently use complete() because tool blocks 
+        # need to be parsed as a whole. But we could technically stream the 
+        # final round after all tool results are in.
         for round_num in range(MAX_TOOL_ROUNDS):
-            # Call LLM — non-streaming for tool rounds, stream only on final
             response = await self.llm.complete_with_tools(
                 messages=current_messages,
                 tools=agentic_schemas,
                 tier=tier,
+                timeout=response_timeout,
             )
-
-            # Check if LLM wants to call a tool
+            
             tool_calls = [
                 block for block in response.get("content", [])
                 if block.get("type") == "tool_use"
             ]
 
             if not tool_calls:
-                # No tool calls — LLM gave a final text response
-                final_text = _extract_text(response)
+                # No tool calls — LLM gave a final text response.
+                # Fake stream it for the loop interface.
+                text = _extract_text(response)
+                for i in range(0, len(text), 10):
+                    yield text[i:i+10]
                 break
 
             # Append LLM's tool-calling response to messages
             current_messages.append({
                 "role": "assistant",
-                "content": response["content"],
+                "content": response.get("content", []),
             })
 
             # Execute each tool call and collect results
@@ -305,11 +306,10 @@ class Orchestrator:
             logger.debug("Tool loop round %d complete, looping back", round_num + 1)
 
         else:
-            # Hit MAX_TOOL_ROUNDS without getting a final response
+            # Hit MAX_TOOL_ROUNDS without getting a final response.
+            # Generator should yield tokens, not return them.
             logger.warning("Tool loop hit MAX_TOOL_ROUNDS=%d, forcing stop", MAX_TOOL_ROUNDS)
-            final_text = "I ran into an issue completing that request. Please try again."
-
-        return current_messages, final_text
+            yield "I ran into an issue completing that request. Please try again."
 
     # ─── prompt assembly ──────────────────────────────────────────────────────
 
@@ -323,8 +323,8 @@ class Orchestrator:
 Guidelines:
 - Be concise. The user may be listening via voice.
 - Never start with filler like "Great!" or "Of course!".
-- Respond in plain text. No markdown headers or bullet symbols unless asked.
-- If you don't know something, say so directly."""
+- Respond in plain text ONLY. ABSOLUTELY NO markdown headers (#), bold (**), or bullet symbols (-/+) unless explicitly asked for formatting.
+- If you don't know something, say so directly. (You are a helpful assistant, but value brevity above all else.)"""
 
         if context:
             return f"{base}\n\n--- Current context ---\n{context}"
@@ -401,33 +401,25 @@ Guidelines:
             sid, len(messages),
         )
 
-        # Step 3 — agentic tool loop
-        # This handles the case where the LLM needs to call a tool to complete
-        # If no agentic tools are needed, this is essentially a single LLM call.
+        # Step 3 — agentic tool loop (Generator)
+        # Yields tokens as they arrive.
         t_tools = time.perf_counter()
-        _, final_text = await self._run_tool_loop(messages, tier)
-        logger.info(
-            "REQ TOOLS  session=%s response_len=%d duration=%.2fs",
-            sid, len(final_text), time.perf_counter() - t_tools,
-        )
-
-        # Step 4 — stream the final response token by token
-        # We have the full text from the tool loop; stream it character by character
-        # so channels (voice, WebUI) get the same streaming interface they expect.
-        for token in _stream_text(final_text):
+        full_text = ""
+        async for token in self._run_tool_loop(messages, tier):
+            full_text += token
             yield token
 
         logger.info(
             "REQ DONE  session=%s total=%.2fs chars=%d",
-            sid, time.perf_counter() - t0, len(final_text),
+            sid, time.perf_counter() - t0, len(full_text),
         )
 
-        # Step 5 — writeback
+        # Step 4 — writeback
         asyncio.create_task(
             run_writeback(
                 session_id=event.session_id,
                 user_text=event.text,
-                response_text=final_text,
+                response_text=full_text,
                 channel=event.channel,
                 tier=tier,
                 intent=classification.get("intent", "question"),

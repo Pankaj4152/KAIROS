@@ -110,7 +110,12 @@ class LLMClient:
             async with self._client.stream(
                 "POST",
                 url,
-                json={"model": model, "messages": messages, "stream": True},
+                json={
+                    "model": model, 
+                    "messages": messages, 
+                    "stream": True,
+                    "max_tokens": timeout * 50 if timeout else None, # heuristic but safer than None
+                },
                 timeout=timeout,
             ) as response:
                 response.raise_for_status()
@@ -184,7 +189,12 @@ class LLMClient:
             try:
                 response = await self._client.post(
                     url,
-                    json={"model": model, "messages": messages, "stream": False},
+                    json={
+                        "model": model, 
+                        "messages": messages, 
+                        "stream": False,
+                        "max_tokens": 2048, # default for complete()
+                    },
                     timeout=timeout,
                 )
 
@@ -297,6 +307,7 @@ class LLMClient:
                     "stream": False,
                     "tools": tool_defs,
                     "tool_choice": "auto",
+                    "max_tokens": 2048,
                 }
                 response = await self._client.post(url, json=request_payload, timeout=timeout)
 
@@ -307,6 +318,7 @@ class LLMClient:
                         "stream": False,
                         "functions": functions,
                         "function_call": "auto",
+                        "max_tokens": 2048,
                     }
                     response = await self._client.post(url, json=legacy_payload, timeout=timeout)
 

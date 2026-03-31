@@ -73,12 +73,20 @@ class TelegramChannel:
         Runs as a background task alongside orchestrator.process().
         Telegram typing indicators expire after ~5s — we refresh before that.
         """
+        logger.debug("Typing indicator task started")
         while not stop_event.is_set():
             try:
                 await update.message.chat.send_action(ChatAction.TYPING)
-            except Exception:
-                pass   # don't let a failed typing action crash the handler
-            await asyncio.sleep(TYPING_REFRESH_SECS)
+                logger.debug("Telegram typing action sent")
+            except Exception as e:
+                logger.warning("Failed to send Telegram typing action: %s", e)
+            
+            # Use small sleep chunks to be more responsive to stop_event
+            for _ in range(int(TYPING_REFRESH_SECS * 2)):
+                if stop_event.is_set():
+                    break
+                await asyncio.sleep(0.5)
+        logger.debug("Typing indicator task stopped")
 
     # ─── response splitting ───────────────────────────────────────────────────
 
