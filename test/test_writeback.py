@@ -149,3 +149,16 @@ class TestSaveFacts:
         run(_save_facts([], tmp_data_dir))
         assert not os.path.exists(path)
         logger.info("Empty facts correctly skipped file creation")
+
+
+# ── tier regression tests ─────────────────────────────────────────────────────
+
+class TestTierUsage:
+    def test_extract_facts_uses_tier1(self):
+        """Fact extractor must use tier 1 (local phi) — never tier 2."""
+        from memory.writeback import _extract_facts
+        llm = _mock_llm("[]")
+        run(_extract_facts("user", "assistant", llm))
+        _, kwargs = llm.complete.call_args
+        assert kwargs.get("tier") == 1, f"extract_facts should use tier=1, got tier={kwargs.get('tier')}"
+

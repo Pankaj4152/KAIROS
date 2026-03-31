@@ -181,7 +181,7 @@ class Classifier:
         try:
             raw = await self.llm.complete(
                 messages=[{"role": "user", "content": prompt}],
-                tier=2,
+                tier=1,
                 timeout=10.0,  # classifier must be fast — hard limit
             )
             result = self._parse(raw)

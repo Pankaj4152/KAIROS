@@ -111,7 +111,7 @@ async def _compact_session(session_id: str, llm: LLMClient) -> None:
         )
         summary = await llm.complete(
             [{"role": "user", "content": prompt}],
-            tier=2,
+            tier=1,
             timeout=15.0,
         )
         await compact(session_id, summary)
@@ -141,7 +141,7 @@ async def _extract_facts(
     try:
         raw = await llm.complete(
             [{"role": "user", "content": prompt}],
-            tier=2,
+            tier=1,
             timeout=10.0,
         )
 
