@@ -4,10 +4,10 @@ data/gcal_creds.json
 
 
 
-
+gcal_creds.json
+gcal_token.json
 commands.txt
 tasks.txt
-preferences.json
 data/profile.md
 
 archive/

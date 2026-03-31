@@ -17,13 +17,17 @@ Singleton:
 
 import asyncio
 import json
+import logging
 import os
+import time
 from typing import AsyncGenerator
 
 import httpx
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 # ─── config ───────────────────────────────────────────────────────────────────
@@ -99,6 +103,8 @@ class LLMClient:
         """
         model = self._resolve_model(tier)
         url   = f"{self.base_url}/chat/completions"
+        t0 = time.perf_counter()
+        logger.debug("LLM stream start  model=%s tier=%d", model, tier)
 
         try:
             async with self._client.stream(
@@ -124,13 +130,18 @@ class LLMClient:
                         # Malformed SSE chunk — skip and keep streaming
                         continue
 
+            logger.debug("LLM stream done   model=%s tier=%d duration=%.2fs", model, tier, time.perf_counter() - t0)
+
         except httpx.HTTPStatusError as e:
+            logger.warning("LLM stream error  model=%s tier=%d HTTP %d duration=%.2fs", model, tier, e.response.status_code, time.perf_counter() - t0)
             raise LLMError(
                 f"LiteLLM HTTP {e.response.status_code} on stream (tier={tier})"
             ) from e
         except httpx.TimeoutException:
+            logger.warning("LLM stream timeout  model=%s tier=%d after %.2fs", model, tier, time.perf_counter() - t0)
             raise LLMError(f"Stream timed out after {timeout}s (tier={tier})") from None
         except httpx.RequestError as e:
+            logger.warning("LLM stream unreachable  model=%s tier=%d error=%s", model, tier, e)
             raise LLMError(f"Could not reach LiteLLM at {self.base_url}: {e}") from e
 
     async def complete(
@@ -156,12 +167,18 @@ class LLMClient:
         model = self._resolve_model(tier)
         url   = f"{self.base_url}/chat/completions"
         last_error: Exception | None = None
+        t0 = time.perf_counter()
+        logger.info("LLM complete start  model=%s tier=%d", model, tier)
 
         for attempt in range(retries + 1):
 
             if attempt > 0:
                 # Exponential backoff: 1s, 2s, 4s, ...
                 delay = RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                logger.warning(
+                    "LLM complete retry  model=%s attempt=%d/%d delay=%.1fs error=%s",
+                    model, attempt + 1, retries + 1, delay, last_error,
+                )
                 await asyncio.sleep(delay)
 
             try:
@@ -178,7 +195,12 @@ class LLMClient:
                     )
 
                 response.raise_for_status()   # catches 5xx
-                return response.json()["choices"][0]["message"]["content"]
+                result = response.json()["choices"][0]["message"]["content"]
+                logger.info(
+                    "LLM complete done   model=%s tier=%d duration=%.2fs chars=%d",
+                    model, tier, time.perf_counter() - t0, len(result),
+                )
+                return result
 
             except LLMError:
                 raise   # 4xx errors — don't retry
@@ -190,6 +212,10 @@ class LLMClient:
             except (KeyError, IndexError) as e:
                 raise LLMError(f"Unexpected LiteLLM response shape: {e}") from e
 
+        logger.error(
+            "LLM complete FAILED  model=%s tier=%d attempts=%d duration=%.2fs error=%s",
+            model, tier, retries + 1, time.perf_counter() - t0, last_error,
+        )
         raise LLMError(
             f"LiteLLM failed after {retries + 1} attempts (tier={tier}): {last_error}"
         )
@@ -227,6 +253,8 @@ class LLMClient:
         model = self._resolve_model(tier)
         url   = f"{self.base_url}/chat/completions"
         last_error: Exception | None = None
+        t0 = time.perf_counter()
+        logger.info("LLM tools start  model=%s tier=%d tool_count=%d", model, tier, len(tools))
 
         # Convert internal Anthropic-style messages to OpenAI-compatible messages.
         openai_messages = self._to_openai_tool_messages(messages)
@@ -254,6 +282,10 @@ class LLMClient:
 
             if attempt > 0:
                 delay = RETRY_BASE_DELAY * (2 ** (attempt - 1))
+                logger.warning(
+                    "LLM tools retry  model=%s attempt=%d/%d delay=%.1fs error=%s",
+                    model, attempt + 1, retries + 1, delay, last_error,
+                )
                 await asyncio.sleep(delay)
 
             try:
@@ -289,11 +321,16 @@ class LLMClient:
                     )
 
                 response.raise_for_status()
-                
+
                 # Convert OpenAI response to Anthropic format
-                return self._convert_to_anthropic_format(
+                result = self._convert_to_anthropic_format(
                     response.json()["choices"][0]["message"]
                 )
+                logger.info(
+                    "LLM tools done   model=%s tier=%d duration=%.2fs blocks=%d",
+                    model, tier, time.perf_counter() - t0, len(result.get("content", [])),
+                )
+                return result
 
             except LLMError:
                 raise
@@ -305,6 +342,10 @@ class LLMClient:
             except (KeyError, IndexError) as e:
                 raise LLMError(f"Unexpected LiteLLM response shape: {e}") from e
 
+        logger.error(
+            "LLM tools FAILED  model=%s tier=%d attempts=%d duration=%.2fs error=%s",
+            model, tier, retries + 1, time.perf_counter() - t0, last_error,
+        )
         raise LLMError(
             f"LiteLLM failed after {retries + 1} attempts (tier={tier}): {last_error}"
         )

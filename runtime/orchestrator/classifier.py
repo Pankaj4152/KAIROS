@@ -18,6 +18,7 @@ Failure contract:
 
 import json
 import logging
+import time
 
 from llm.client import LLMClient
 
@@ -175,6 +176,7 @@ class Classifier:
         """
         # Use str.replace, not .format() — user text may contain { } characters
         prompt = CLASSIFIER_PROMPT.replace("{message}", text)
+        t0 = time.perf_counter()
 
         try:
             raw = await self.llm.complete(
@@ -183,11 +185,17 @@ class Classifier:
                 timeout=10.0,  # classifier must be fast — hard limit
             )
             result = self._parse(raw)
-            logger.debug("Classified %r → %s", text[:40], result)
+            logger.info(
+                "Classified %r → %s (%.2fs)",
+                text[:40], result, time.perf_counter() - t0,
+            )
             return result
 
         except Exception as e:
-            logger.warning("Classifier failed, using default: %s", e)
+            logger.warning(
+                "Classifier failed, using default (%.2fs): %s",
+                time.perf_counter() - t0, e,
+            )
             return DEFAULT_RESULT.copy()
 
 

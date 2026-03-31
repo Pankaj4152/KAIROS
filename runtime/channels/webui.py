@@ -96,6 +96,10 @@ class WebUIChannel:
 
                     responding = True
                     try:
+                        logger.info(
+                            "WebUI: message from session %s: %r",
+                            session_id[:8], text[:80],
+                        )
                         event = normalize_webui(text, session_id)
 
                         async for token in orchestrator.process(event):

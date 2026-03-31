@@ -26,6 +26,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from typing import AsyncGenerator
 
 from dotenv import load_dotenv
@@ -372,32 +373,54 @@ Guidelines:
             4. Stream    — yield final response tokens
             5. Writeback — embed + session + facts in background
         """
+        t0 = time.perf_counter()
+        sid = event.session_id[:8]
+        logger.info(
+            "REQ START  session=%s channel=%s text=%r",
+            sid, event.channel, event.text[:60],
+        )
+
         await self.startup()
 
         # Step 1 — classify
+        t_classify = time.perf_counter()
         classification = await self.classifier.classify(event.text)
         tier         = classification.get("tier", 2)
         domains      = classification.get("domains", [])
         tools_needed = classification.get("tools_needed", [])
 
-        logger.debug(
-            "Classified %r → tier=%s domains=%s tools=%s",
-            event.text[:40], tier, domains, tools_needed,
+        logger.info(
+            "REQ CLASSIFY  session=%s tier=%s domains=%s tools=%s duration=%.2fs",
+            sid, tier, domains, tools_needed, time.perf_counter() - t_classify,
         )
 
         # Step 2 — build initial messages
         messages = await self._build_messages(event, domains, tools_needed)
+        logger.debug(
+            "REQ BUILD  session=%s messages=%d",
+            sid, len(messages),
+        )
 
         # Step 3 — agentic tool loop
         # This handles the case where the LLM needs to call a tool to complete
         # If no agentic tools are needed, this is essentially a single LLM call.
+        t_tools = time.perf_counter()
         _, final_text = await self._run_tool_loop(messages, tier)
+        logger.info(
+            "REQ TOOLS  session=%s response_len=%d duration=%.2fs",
+            sid, len(final_text), time.perf_counter() - t_tools,
+        )
 
         # Step 4 — stream the final response token by token
         # We have the full text from the tool loop; stream it character by character
         # so channels (voice, WebUI) get the same streaming interface they expect.
         for token in _stream_text(final_text):
             yield token
+
+        logger.info(
+            "REQ DONE  session=%s total=%.2fs chars=%d",
+            sid, time.perf_counter() - t0, len(final_text),
+        )
 
         # Step 5 — writeback
         asyncio.create_task(

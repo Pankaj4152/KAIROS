@@ -12,6 +12,7 @@ Flow for every tool call:
 import asyncio
 import inspect
 import logging
+import time
 
 from jsonschema import validate, ValidationError
 
@@ -63,7 +64,8 @@ async def execute(tool_name: str, tool_input: dict) -> str:
         return f"Error: could not load tool '{tool_name}'"
 
     # ── 5. dispatch ────────────────────────────────────────────────────────────
-    logger.info("Executing tool: %s | inputs: %s", tool_name, list(tool_input.keys()))
+    logger.info("Tool exec start  tool=%s inputs=%s", tool_name, list(tool_input.keys()))
+    t0 = time.perf_counter()
 
     try:
         if inspect.iscoroutinefunction(handler):
@@ -78,12 +80,22 @@ async def execute(tool_name: str, tool_input: dict) -> str:
                 timeout=TOOL_TIMEOUT_SECONDS,
             )
 
+        logger.info(
+            "Tool exec done   tool=%s duration=%.2fs chars=%d",
+            tool_name, time.perf_counter() - t0, len(str(result)),
+        )
         return str(result)
 
     except asyncio.TimeoutError:
-        logger.warning("Tool %r timed out after %ss", tool_name, TOOL_TIMEOUT_SECONDS)
+        logger.warning(
+            "Tool exec TIMEOUT  tool=%s after %ss",
+            tool_name, TOOL_TIMEOUT_SECONDS,
+        )
         return f"Error: tool '{tool_name}' timed out"
 
     except Exception as e:
-        logger.warning("Tool %r raised: %s", tool_name, e)
+        logger.warning(
+            "Tool exec FAILED  tool=%s duration=%.2fs error=%s",
+            tool_name, time.perf_counter() - t0, e,
+        )
         return f"Error running '{tool_name}': {e}"
