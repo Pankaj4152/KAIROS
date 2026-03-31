@@ -430,6 +430,7 @@ Guidelines:
                 response_text=final_text,
                 channel=event.channel,
                 tier=tier,
+                intent=classification.get("intent", "question"),
                 llm=self.llm,
                 data_dir=self.data_dir,
             )

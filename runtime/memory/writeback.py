@@ -217,6 +217,11 @@ async def _save_facts(facts: list[dict], data_dir: str) -> None:
 
     await asyncio.to_thread(_run)
 
+# Intents that carry no useful information for memory.
+# Session history is still preserved (conversation flow matters),
+# but embedding + fact extraction are skipped to avoid noise.
+SKIP_MEMORY_INTENTS = frozenset({"chitchat"})
+
 
 # ─── main entry point ─────────────────────────────────────────────────────────
 
@@ -226,14 +231,18 @@ async def run_writeback(
     response_text: str,
     channel: str,
     tier: int,
+    intent: str = "question",
     llm: LLMClient | None = None,
     data_dir: str | None = None,
 ) -> None:
     """
-    Run all three write-back jobs in parallel after a completed response.
+    Run write-back jobs after a completed response.
 
     Call this via asyncio.create_task() — never await it directly.
     The user already has their response. This runs in the background.
+
+    For low-information intents (chitchat), only session append runs.
+    Embedding and fact extraction are skipped to avoid memory pollution.
 
     Args:
         session_id:    which session to write to.
@@ -241,24 +250,37 @@ async def run_writeback(
         response_text: Kairos's full response.
         channel:       "voice" | "telegram" | "webui" | "cron".
         tier:          which model tier handled this response (1/2/3).
+        intent:        classified intent — used to skip memory for chitchat.
         llm:           LLM client for compaction + fact extraction.
                        Defaults to a new LLMClient() if not provided.
         data_dir:      where preferences.json lives. Defaults to DATA_DIR env var.
-
-    Swapping the fact extractor:
-        Pass a different llm client — e.g. one that calls a fine-tuned
-        classifier instead of phi-3-mini. The interface is just LLMClient.
     """
     import os
     _llm      = llm or LLMClient()
     _data_dir = data_dir or os.getenv("DATA_DIR", "./data")
 
-    logger.debug("Writeback starting for session %s", session_id[:8])
+    skip_memory = intent in SKIP_MEMORY_INTENTS
 
-    # Run all three jobs in parallel — none depends on the others
-    embed_task   = _embed_turn(session_id, user_text, response_text)
+    logger.debug(
+        "Writeback starting for session %s (intent=%s, skip_memory=%s)",
+        session_id[:8], intent, skip_memory,
+    )
+
+    # Session append always runs — preserves conversation flow
     session_task = _append_session(session_id, user_text, response_text, channel, tier, _llm)
-    facts_task   = _extract_facts(user_text, response_text, _llm)
+
+    if skip_memory:
+        # Chitchat — only save session history, skip embedding + facts
+        await session_task
+        logger.debug(
+            "Writeback complete for session %s (skipped embed+facts for %s)",
+            session_id[:8], intent,
+        )
+        return
+
+    # Full writeback — embed + session + facts in parallel
+    embed_task = _embed_turn(session_id, user_text, response_text)
+    facts_task = _extract_facts(user_text, response_text, _llm)
 
     embed_result, _, facts = await asyncio.gather(
         embed_task,

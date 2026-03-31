@@ -18,11 +18,39 @@ Failure contract:
 
 import json
 import logging
+import re
 import time
 
 from llm.client import LLMClient
 
 logger = logging.getLogger(__name__)
+
+
+# ─── fast-path pattern ────────────────────────────────────────────────────────
+
+# Matches greetings and trivial casual phrases. Checked BEFORE any LLM call.
+# Intentionally conservative — only catches clear greetings.
+# Everything else still goes through the LLM classifier.
+_CHITCHAT_RE = re.compile(
+    r"^\s*"
+    r"(h(i|ey|ello|owdy|ola)|yo|sup|hey+|what'?s\s*up"
+    r"|good\s*(morning|afternoon|evening|night)"
+    r"|how\s*(are|r)\s*(you|u|ya)"
+    r"|thanks?|thank\s*you|thx|ty"
+    r"|bye|goodbye|see\s*ya|later|gn|good\s*night"
+    r"|ok(ay)?|cool|nice|great|awesome|lol|haha|hmm+"
+    r"|yes|no|yep|nope|yeah|nah"
+    r")\s*[!?.]*\s*$",
+    re.IGNORECASE,
+)
+
+_CHITCHAT_RESULT: dict = {
+    "intent":       "chitchat",
+    "complexity":   1,
+    "domains":      [],
+    "tools_needed": [],
+    "tier":         1,
+}
 
 
 # ─── valid values ─────────────────────────────────────────────────────────────
@@ -53,41 +81,42 @@ DEFAULT_RESULT: dict = {
 # {message} is replaced with str.replace() — not .format() — so curly braces
 # in user messages (code, JSON, etc.) don't corrupt the prompt.
 CLASSIFIER_PROMPT = """\
-You are a request classifier for a personal AI assistant.
-Respond ONLY with valid JSON. No explanation. No markdown. No code blocks. Just the raw JSON object.
+You are a request classifier. Output ONLY raw JSON. No text. No markdown.
 
-Classify this request: {message}
+JSON shape:
+{"intent":"<intent>","complexity":<1-3>,"domains":[],"tools_needed":[],"tier":<1-3>}
 
-Return exactly this JSON shape:
-{
-  "intent": "<question|task|reminder|memory|chitchat|search|code>",
-  "complexity": <1|2|3>,
-  "domains": [],
-  "tools_needed": [],
-  "tier": <1|2|3>
-}
+CRITICAL RULES (follow strictly):
+1. Greetings and casual messages are ALWAYS intent=chitchat, complexity=1, tier=1
+2. Simple factual questions are complexity=1, tier=1
+3. Web search, task management are complexity=2, tier=2
+4. Code writing, reasoning, research, multi-step planning are complexity=3, tier=3
 
-Rules for complexity and tier:
-- complexity 1, tier 1: trivial (greetings, time, simple facts, list my tasks)
-- complexity 2, tier 2: moderate (web search, task management)
-- complexity 3, tier 3: complex (reasoning, code writing, research, multi-step planning)
+Valid intents: question, task, reminder, memory, chitchat, search, code
 
-Rules for domains (which memory stores to query — include only what is relevant):
-- "tasks"    — todos, work items, what to do
-- "events"   — meetings, schedule, today, tomorrow
-- "habits"   — streaks, routines, daily check-ins
-- "spending" — money, expenses, budget, purchases
-- "memory"   — remember, recall, what did i say, earlier
+Valid domains (include ONLY if relevant, otherwise empty):
+- "tasks" — todos, work items
+- "events" — meetings, schedule
+- "habits" — streaks, routines
+- "spending" — money, expenses
+- "memory" — recall past conversations
 
-Rules for tools_needed (tools to invoke before the LLM response):
-- "web_search"     — current information, news, prices, weather
-- "send_message"   — send a message to someone
+Valid tools_needed (otherwise empty):
+- "web_search" — current info, news, prices, weather
+- "send_message" — send a message
 
 Examples:
-- "hey" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
-- "what tasks do i have" -> {"intent":"question","complexity":1,"domains":["tasks"],"tools_needed":[],"tier":1}
-- "search for latest AI news" -> {"intent":"search","complexity":2,"domains":[],"tools_needed":["web_search"],"tier":2}
-- "write a python script to scrape a website" -> {"intent":"code","complexity":3,"domains":[],"tools_needed":[],"tier":3}
+"hello" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
+"hey" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
+"good morning" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
+"how are you" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
+"thanks" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
+"what tasks do i have" -> {"intent":"question","complexity":1,"domains":["tasks"],"tools_needed":[],"tier":1}
+"what's the weather" -> {"intent":"search","complexity":2,"domains":[],"tools_needed":["web_search"],"tier":2}
+"search for latest AI news" -> {"intent":"search","complexity":2,"domains":[],"tools_needed":["web_search"],"tier":2}
+"write a python script to scrape a website" -> {"intent":"code","complexity":3,"domains":[],"tools_needed":[],"tier":3}
+
+Classify this: {message}
 """
 
 
@@ -167,6 +196,13 @@ class Classifier:
         """
         Classify a user message. Always returns a valid routing dict.
 
+        Fast path:
+            Regex catches obvious greetings/casual phrases → instant return.
+            No LLM call, no latency, no cost.
+
+        Slow path:
+            Everything else → tier-1 LLM (phi) classification.
+
         Returns:
             intent       — what the user wants
             complexity   — 1/2/3 (depth of response needed)
@@ -174,6 +210,14 @@ class Classifier:
             tools_needed — which tools to invoke before the LLM call
             tier         — which model to use (1=local, 2=haiku, 3=sonnet)
         """
+        # Fast path — regex catches trivial greetings before any LLM call
+        if _CHITCHAT_RE.match(text):
+            logger.info(
+                "Classified %r → chitchat (fast path, 0.00s)", text[:40],
+            )
+            return _CHITCHAT_RESULT.copy()
+
+        # Slow path — LLM-based classification
         # Use str.replace, not .format() — user text may contain { } characters
         prompt = CLASSIFIER_PROMPT.replace("{message}", text)
         t0 = time.perf_counter()
