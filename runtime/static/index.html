@@ -8,143 +8,221 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0f0f0f;
-      color: #e8e8e8;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+      background: #ffffff;
+      color: #1a1a1a;
       height: 100vh;
       display: flex;
       flex-direction: column;
     }
 
+    /* === HEADER === */
     header {
-      padding: 16px 24px;
-      border-bottom: 1px solid #2a2a2a;
+      padding: 14px 24px;
+      border-bottom: 1px solid #e5e5e5;
       display: flex;
       align-items: center;
       gap: 10px;
+      background: #ffffff;
     }
 
     .logo {
-      width: 28px; height: 28px;
-      background: #7f77dd;
+      width: 28px;
+      height: 28px;
+      background: #1a1a1a;
       border-radius: 6px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 14px; font-weight: 600; color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 600;
+      color: #ffffff;
     }
 
-    header h1 { font-size: 16px; font-weight: 500; color: #fff; }
+    header h1 {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1a1a1a;
+      letter-spacing: -0.2px;
+    }
 
     .status {
       margin-left: auto;
-      font-size: 12px;
+      font-size: 11px;
       color: #666;
-      display: flex; align-items: center; gap: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .status-dot {
-      width: 7px; height: 7px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
-      background: #555;
-      transition: background 0.3s;
+      background: #ccc;
+      transition: all 0.3s ease;
     }
 
-    .status-dot.connected { background: #1d9e75; }
-    .status-dot.thinking  { background: #ef9f27; }
+    .status-dot.connected {
+      background: #22c55e;
+    }
 
+    .status-dot.thinking {
+      background: #f59e0b;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* === MESSAGES AREA === */
     #messages {
       flex: 1;
       overflow-y: auto;
-      padding: 24px;
+      padding: 24px 32px;
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 12px;
+      scroll-behavior: smooth;
+      background: #ffffff;
+    }
+
+    #messages::-webkit-scrollbar {
+      width: 7px;
+    }
+
+    #messages::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    #messages::-webkit-scrollbar-thumb {
+      background: #d1d5db;
+      border-radius: 4px;
+    }
+
+    #messages::-webkit-scrollbar-thumb:hover {
+      background: #9ca3af;
     }
 
     .msg {
-      max-width: 680px;
-      line-height: 1.65;
-      font-size: 15px;
+      display: flex;
+      flex-direction: column;
+      max-width: 600px;
     }
 
     .msg.user {
       align-self: flex-end;
-      background: #1e1e2e;
-      border: 1px solid #2a2a3a;
-      padding: 10px 16px;
-      border-radius: 16px 16px 4px 16px;
-      color: #c8c8e8;
+    }
+
+    .msg.user .bubble {
+      background: #1a1a1a;
+      color: #ffffff;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.5;
+      word-wrap: break-word;
+      max-width: 100%;
     }
 
     .msg.assistant {
       align-self: flex-start;
-      color: #e8e8e8;
-      white-space: pre-wrap;
     }
 
     .msg.assistant .name {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 600;
-      color: #7f77dd;
+      color: #666;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.05em;
       margin-bottom: 6px;
     }
 
+    .msg.assistant .bubble {
+      background: #f5f5f5;
+      color: #1a1a1a;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      line-height: 1.6;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      max-width: 100%;
+    }
+
+    .msg.assistant .content {
+      display: block;
+    }
+
+    /* === THINKING STATE === */
+    .msg.thinking {
+      align-self: flex-start;
+    }
+
+    .msg.thinking .name {
+      font-size: 10px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .msg.thinking .bubble {
+      background: #f5f5f5;
+      color: #666;
+      padding: 10px 14px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      min-width: 160px;
+    }
+
+    .thinking-dots {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .thinking-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #999;
+      animation: bounce-dot 1.4s infinite;
+    }
+
+    .thinking-dot:nth-child(1) { animation-delay: 0s; }
+    .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce-dot {
+      0%, 80%, 100% {
+        opacity: 0.5;
+        transform: translateY(0);
+      }
+      40% {
+        opacity: 1;
+        transform: translateY(-6px);
+      }
+    }
+
     .cursor {
-      display: inline-block;
-      width: 2px; height: 16px;
-      background: #7f77dd;
-      margin-left: 2px;
-      vertical-align: middle;
+      display: inline;
+      width: 1px;
+      height: 1em;
+      background: #1a1a1a;
+      margin-left: 1px;
       animation: blink 0.8s step-end infinite;
     }
 
-    @keyframes blink { 50% { opacity: 0; } }
-
-    .input-area {
-      padding: 16px 24px;
-      border-top: 1px solid #2a2a2a;
-      display: flex;
-      gap: 10px;
-      align-items: flex-end;
+    @keyframes blink {
+      50% { opacity: 0; }
     }
-
-    textarea {
-      flex: 1;
-      background: #1a1a1a;
-      border: 1px solid #2a2a2a;
-      border-radius: 10px;
-      color: #e8e8e8;
-      font-family: inherit;
-      font-size: 15px;
-      padding: 10px 14px;
-      resize: none;
-      min-height: 44px;
-      max-height: 160px;
-      outline: none;
-      transition: border-color 0.2s;
-      line-height: 1.5;
-    }
-
-    textarea:focus { border-color: #534ab7; }
-    textarea::placeholder { color: #444; }
-
-    button {
-      width: 44px; height: 44px;
-      background: #534ab7;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      transition: background 0.2s, transform 0.1s;
-      flex-shrink: 0;
-    }
-
-    button:hover  { background: #6258c4; }
-    button:active { transform: scale(0.95); }
-    button:disabled { background: #2a2a2a; cursor: not-allowed; }
-
-    button svg { width: 18px; height: 18px; fill: #fff; }
 
     .empty-state {
       flex: 1;
@@ -152,12 +230,118 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: #444;
-      gap: 8px;
+      gap: 12px;
+      text-align: center;
     }
 
-    .empty-state .big { font-size: 32px; font-weight: 600; color: #2a2a2a; }
-    .empty-state .sub { font-size: 14px; }
+    .empty-state .big {
+      font-size: 32px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .empty-state .sub {
+      font-size: 13px;
+      color: #999;
+      font-weight: 400;
+    }
+
+    /* === INPUT AREA === */
+    .input-area {
+      padding: 16px 32px;
+      border-top: 1px solid #e5e5e5;
+      background: #ffffff;
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    textarea {
+      flex: 1;
+      background: #ffffff;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      color: #1a1a1a;
+      font-family: inherit;
+      font-size: 14px;
+      padding: 10px 12px;
+      resize: none;
+      min-height: 40px;
+      max-height: 140px;
+      outline: none;
+      transition: border-color 0.2s ease;
+      line-height: 1.5;
+    }
+
+    textarea:focus {
+      border-color: #1a1a1a;
+    }
+
+    textarea:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background: #f9f9f9;
+    }
+
+    textarea::placeholder {
+      color: #999;
+    }
+
+    button {
+      width: 40px;
+      height: 40px;
+      background: #1a1a1a;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    button:hover:not(:disabled) {
+      background: #333;
+    }
+
+    button:active:not(:disabled) {
+      opacity: 0.8;
+    }
+
+    button:disabled {
+      background: #e5e5e5;
+      cursor: not-allowed;
+    }
+
+    button svg {
+      width: 16px;
+      height: 16px;
+      fill: #fff;
+      stroke: #fff;
+      stroke-width: 2;
+    }
+
+    button:disabled svg {
+      fill: #999;
+      stroke: #999;
+    }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 640px) {
+      #messages {
+        padding: 16px 16px;
+      }
+      .input-area {
+        padding: 12px 16px;
+      }
+      .msg {
+        max-width: 100%;
+      }
+      header {
+        padding: 12px 16px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -167,48 +351,96 @@
   <h1>Kairos</h1>
   <div class="status">
     <div class="status-dot" id="dot"></div>
-    <span id="status-text">connecting...</span>
+    <span id="status-text">connecting</span>
   </div>
 </header>
 
 <div id="messages">
   <div class="empty-state" id="empty">
     <div class="big">Kairos</div>
-    <div class="sub">Your personal AI assistant</div>
+    <div class="sub">Start a conversation</div>
   </div>
 </div>
 
 <div class="input-area">
   <textarea
     id="input"
-    placeholder="Message Kairos..."
+    placeholder="Type a message..."
     rows="1"
     disabled
   ></textarea>
-  <button id="send-btn" disabled>
-    <svg viewBox="0 0 24 24"><path d="M2 21L23 12 2 3v7l15 2-15 2v7z"/></svg>
+  <button id="send-btn" disabled title="Send message">
+    <svg viewBox="0 0 24 24" fill="none"><path d="M3 12l18-9-18 9m0 0l18 9-18-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </button>
 </div>
 
 <script>
   const messagesEl = document.getElementById('messages');
-  const inputEl    = document.getElementById('input');
-  const sendBtn    = document.getElementById('send-btn');
-  const dot        = document.getElementById('dot');
+  const inputEl = document.getElementById('input');
+  const sendBtn = document.getElementById('send-btn');
+  const dot = document.getElementById('dot');
   const statusText = document.getElementById('status-text');
-  const emptyEl    = document.getElementById('empty');
+  const emptyEl = document.getElementById('empty');
 
   let ws;
   let currentMsgEl = null;
+  let thinkingEl = null;
   let isGenerating = false;
+  let hasContent = false;
+
+  const thinkingPhrases = [
+    'Thinking',
+    'Processing',
+    'Analyzing',
+    'Working on it'
+  ];
+
+  let thinkingIndex = 0;
 
   function setStatus(state) {
     dot.className = 'status-dot ' + state;
     statusText.textContent = {
-      connected:  'connected',
-      thinking:   'thinking...',
-      connecting: 'connecting...',
+      connected: 'connected',
+      thinking: 'thinking',
+      connecting: 'connecting'
     }[state] || state;
+  }
+
+  function showThinking() {
+    if (thinkingEl) return;
+
+    if (!hasContent && emptyEl?.parentNode) {
+      emptyEl.remove();
+      hasContent = true;
+    }
+
+    thinkingEl = document.createElement('div');
+    thinkingEl.className = 'msg thinking';
+    
+    const phrase = thinkingPhrases[thinkingIndex % thinkingPhrases.length];
+    thinkingIndex++;
+
+    thinkingEl.innerHTML = `
+      <div class="name">Kairos</div>
+      <div class="bubble">
+        <div class="thinking-dots">
+          <div class="thinking-dot"></div>
+          <div class="thinking-dot"></div>
+          <div class="thinking-dot"></div>
+        </div>
+        <span>${phrase}</span>
+      </div>
+    `;
+
+    messagesEl.appendChild(thinkingEl);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function hideThinking() {
+    if (thinkingEl?.parentNode) {
+      thinkingEl.remove();
+      thinkingEl = null;
+    }
   }
 
   function connect() {
@@ -217,8 +449,8 @@
 
     ws.onopen = () => {
       setStatus('connected');
-      inputEl.disabled  = false;
-      sendBtn.disabled  = false;
+      inputEl.disabled = false;
+      sendBtn.disabled = false;
       inputEl.focus();
     };
 
@@ -226,7 +458,7 @@
       setStatus('connecting');
       inputEl.disabled = true;
       sendBtn.disabled = true;
-      // Auto-reconnect after 2s
+      hideThinking();
       setTimeout(connect, 2000);
     };
 
@@ -236,9 +468,10 @@
       const token = evt.data;
 
       if (token === '[DONE]') {
-        // Remove blinking cursor
+        hideThinking();
         const cursor = currentMsgEl?.querySelector('.cursor');
         if (cursor) cursor.remove();
+        
         currentMsgEl = null;
         isGenerating = false;
         setStatus('connected');
@@ -249,16 +482,24 @@
       }
 
       if (!currentMsgEl) {
-        // First token — create the assistant message bubble
-        if (emptyEl) emptyEl.remove();
+        hideThinking();
+
+        if (!hasContent && emptyEl?.parentNode) {
+          emptyEl.remove();
+          hasContent = true;
+        }
 
         currentMsgEl = document.createElement('div');
         currentMsgEl.className = 'msg assistant';
-        currentMsgEl.innerHTML = '<div class="name">Kairos</div><span class="content"></span><span class="cursor"></span>';
+        currentMsgEl.innerHTML = `
+          <div class="name">Kairos</div>
+          <div class="bubble">
+            <span class="content"></span><span class="cursor"></span>
+          </div>
+        `;
         messagesEl.appendChild(currentMsgEl);
       }
 
-      // Append token to the content span
       currentMsgEl.querySelector('.content').textContent += token;
       messagesEl.scrollTop = messagesEl.scrollHeight;
     };
@@ -266,31 +507,38 @@
 
   function send() {
     const text = inputEl.value.trim();
-    if (!text || isGenerating || ws.readyState !== WebSocket.OPEN) return;
+    if (!text || isGenerating || ws?.readyState !== WebSocket.OPEN) return;
 
-    // Remove empty state
-    if (emptyEl && emptyEl.parentNode) emptyEl.remove();
+    if (!hasContent && emptyEl?.parentNode) {
+      emptyEl.remove();
+      hasContent = true;
+    }
 
-    // Show user message
     const userEl = document.createElement('div');
     userEl.className = 'msg user';
-    userEl.textContent = text;
+    userEl.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
     messagesEl.appendChild(userEl);
     messagesEl.scrollTop = messagesEl.scrollHeight;
 
-    // Send to server
     ws.send(text);
 
-    // Disable input while generating
     inputEl.value = '';
     inputEl.style.height = 'auto';
+
     isGenerating = true;
     setStatus('thinking');
     inputEl.disabled = true;
     sendBtn.disabled = true;
+
+    setTimeout(showThinking, 80);
   }
 
-  // Send on Enter (Shift+Enter = newline)
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   inputEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -298,10 +546,9 @@
     }
   });
 
-  // Auto-resize textarea as user types
   inputEl.addEventListener('input', () => {
     inputEl.style.height = 'auto';
-    inputEl.style.height = Math.min(inputEl.scrollHeight, 160) + 'px';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
   });
 
   sendBtn.addEventListener('click', send);
