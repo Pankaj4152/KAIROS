@@ -90,7 +90,7 @@ JSON shape:
 CRITICAL RULES (follow strictly):
 1. Greetings and casual messages are ALWAYS intent=chitchat, complexity=1, tier=1
 2. Simple factual questions are complexity=1, tier=1
-3. Web search, task management are complexity=2, tier=2
+3. Web search, task management, SENDING MESSAGES, or using ANY tools are complexity=2, tier=2
 4. Code writing, reasoning, research, multi-step planning are complexity=3, tier=3
 
 Valid intents: question, task, reminder, memory, chitchat, search, code
@@ -115,6 +115,8 @@ Examples:
 "what tasks do i have" -> {"intent":"question","complexity":1,"domains":["tasks"],"tools_needed":[],"tier":1}
 "what's the weather" -> {"intent":"search","complexity":2,"domains":[],"tools_needed":["web_search"],"tier":2}
 "search for latest AI news" -> {"intent":"search","complexity":2,"domains":[],"tools_needed":["web_search"],"tier":2}
+"send me whats ai and ml on telegram" -> {"intent":"task","complexity":2,"domains":[],"tools_needed":["send_message"],"tier":2}
+"send me a test msg" -> {"intent":"task","complexity":2,"domains":[],"tools_needed":["send_message"],"tier":2}
 "write a python script to scrape a website" -> {"intent":"code","complexity":3,"domains":[],"tools_needed":[],"tier":3}
 
 Classify this: {message}

@@ -28,6 +28,9 @@ def _load_web_search():
     from tools.web_search import web_search
     return web_search
 
+def _load_send_message():
+    from tools.messaging import send_message
+    return send_message
 
 
 # ── registry ───────────────────────────────────────────────────────────────────
@@ -55,6 +58,30 @@ REGISTRY: dict[str, dict] = {
         "handler": _load_web_search,   # callable that returns the actual handler
         "enabled": True,
         "requires_env": [],            # duckduckgo default needs no key
+    },
+
+    "send_message": {
+        "description": (
+            "Push a direct message to the user's Telegram. Use this whenever the user asks you to send them something "
+            "on Telegram, OR to proactively alert them. Supports emojis and standard formatting. "
+            "CRITICAL: Telegram has a hard limit of 4096 characters. If your content is longer, "
+            "chunk it into smaller parts (e.g., 'Part 1...') and call this tool multiple times."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "maxLength": 4096,
+                    "description": "The message text to send to the user.",
+                }
+            },
+            "required": ["message"],
+            "additionalProperties": False,
+        },
+        "handler": _load_send_message,
+        "enabled": True,
+        "requires_env": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_USER_ID"],
     },
 
 }

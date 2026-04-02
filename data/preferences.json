@@ -53,7 +53,11 @@
     "more": "Yes",
     "I am an AI language model": "AI",
     "How can I be of assistance?": "You can ask me to perform various tasks such as providing information on a topic, answering specific questions, or performing calculations. You can also tell me your preferences and I will try to fulfill them within my capabilities.",
-    "aiml": "to be helpful and informative"
+    "aiml": "to be helpful and informative",
+    "price": "$1741",
+    "use_send_messages": "true",
+    "can you": "",
+    "AI": "is a type of computer"
   },
   "current_state": {
     "focus": [
