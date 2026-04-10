@@ -217,6 +217,7 @@ class Orchestrator:
         self,
         messages: list[dict],
         tier: int,
+        tools_needed: list[str],
     ) -> AsyncGenerator[str, None]:
         """
         Agentic tool-use loop (Generator).
@@ -229,10 +230,12 @@ class Orchestrator:
 
         tool_schemas = get_tool_schemas()
 
-        # Filter to only agentic tools — pre-LLM tools already ran
+        # Filter to only agentic tools explicitly requested by the classifier.
+        # This prevents the LLM from getting confused by unused tool schemas,
+        # especially the tier-1 local model during simple chitchat.
         agentic_schemas = [
             s for s in tool_schemas
-            if s["name"] not in PRE_LLM_TOOLS
+            if s["name"] not in PRE_LLM_TOOLS and s["name"] in tools_needed
         ]
 
         # If no agentic tools are available, real stream immediately
@@ -287,8 +290,15 @@ class Orchestrator:
                     "Agentic tool call [round %d]: %s inputs=%s",
                     round_num + 1, tool_name, list(tool_input.keys()),
                 )
-
                 result = await execute(tool_name, tool_input)
+
+                # Append a strict directive to the result. Local models like Llama 3 
+                # often hallucinate additional tools after successful calls. This forces it
+                # to exit the loop and reply to the user.
+                result += (
+                    "\n\n[SYSTEM DIRECTIVE: The tool has executed successfully. "
+                    "You MUST now reply in plain text ONLY. DO NOT call any further tools.]"
+                )
 
                 tool_results.append({
                     "type":        "tool_result",
@@ -405,7 +415,7 @@ Guidelines:
         # Yields tokens as they arrive.
         t_tools = time.perf_counter()
         full_text = ""
-        async for token in self._run_tool_loop(messages, tier):
+        async for token in self._run_tool_loop(messages, tier, tools_needed):
             full_text += token
             yield token
 

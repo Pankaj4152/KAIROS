@@ -16,6 +16,7 @@ Failure contract:
   The user gets a slightly more expensive response. Never a crash.
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -65,7 +66,7 @@ VALID_INTENTS = frozenset({"question", "task", "reminder", "memory",
 
 # ─── defaults ─────────────────────────────────────────────────────────────────
 
-# Returned on any classifier failure. tier=1 is the safe default:
+# Returned on any classifier failure. tier=2 is the safe default:
 # if the classifier can't even parse the input, it's likely simple enough
 # for the local model. Truly complex queries produce parseable JSON.
 DEFAULT_RESULT: dict = {
@@ -73,7 +74,7 @@ DEFAULT_RESULT: dict = {
     "complexity":   1,
     "domains":      [],
     "tools_needed": [],
-    "tier":         1,
+    "tier":         2,
 }
 
 
@@ -89,9 +90,12 @@ JSON shape:
 
 CRITICAL RULES (follow strictly):
 1. Greetings and casual messages are ALWAYS intent=chitchat, complexity=1, tier=1
-2. Simple factual questions are complexity=1, tier=1
-3. Web search, task management, SENDING MESSAGES, or using ANY tools are complexity=2, tier=2
-4. Code writing, reasoning, research, multi-step planning are complexity=3, tier=3
+2. Static, general knowledge questions are intent=question, complexity=1, tier=1 (NO tools)
+3. If the user asks for news, weather, prices, or recent events, or if the query includes "latest", "today", "news", "current" -> MUST use tools_needed=["web_search"], intent=search, tier=2
+4. If the user asks to send a message or share information (e.g. Telegram, SMS) -> MUST use tools_needed=["send_message"], intent=task, tier=2
+5. Code writing, deep research, and multi-step planning are complexity=3, tier=3
+6. If MORE THAN ONE tool is needed -> complexity=3, tier=3
+7. NEVER omit tools if they are implicitly required by the task
 
 Valid intents: question, task, reminder, memory, chitchat, search, code
 
@@ -101,26 +105,40 @@ Valid domains (include ONLY if relevant, otherwise empty):
 - "habits" — streaks, routines
 - "spending" — money, expenses
 - "memory" — recall past conversations
+- "messaging" - send message
 
 Valid tools_needed (otherwise empty):
 - "web_search" — current info, news, prices, weather
-- "send_message" — send a message
+- "send_message" — send a message (use this for Telegram, WhatsApp, SMS, tests)
 
 Examples:
 "hello" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
-"hey" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
+"yo what's up" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
+"appreciate it man thanks!" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
 "good morning" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
-"how are you" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
-"thanks" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
+"do I have anything pending today?" -> {"intent":"question","complexity":1,"domains":["tasks"],"tools_needed":[],"tier":1}
+"remind me what meetings are scheduled?" -> {"intent":"question","complexity":1,"domains":["events"],"tools_needed":[],"tier":1}
 "what tasks do i have" -> {"intent":"question","complexity":1,"domains":["tasks"],"tools_needed":[],"tier":1}
+"how much did i spend last week?" -> {"intent":"question","complexity":1,"domains":["spending"],"tools_needed":[],"tier":1}
+"did i work out yesterday?" -> {"intent":"question","complexity":1,"domains":["habits"],"tools_needed":[],"tier":1}
+"what did we talk about last time?" -> {"intent":"question","complexity":1,"domains":["memory"],"tools_needed":[],"tier":1}
+"can you check today's weather in jaipur?" -> {"intent":"search","complexity":2,"domains":[],"tools_needed":["web_search"],"tier":2}
+"what's happening in AI this week?" -> {"intent":"search","complexity":2,"domains":[],"tools_needed":["web_search"],"tier":2}
 "what's the weather" -> {"intent":"search","complexity":2,"domains":[],"tools_needed":["web_search"],"tier":2}
 "search for latest AI news" -> {"intent":"search","complexity":2,"domains":[],"tools_needed":["web_search"],"tier":2}
+"add a meeting tomorrow at 3pm" -> {"intent":"task","complexity":2,"domains":["events"],"tools_needed":["calendar_write"],"tier":2}
+"what's on my calendar this week?" -> {"intent":"question","complexity":1,"domains":["events"],"tools_needed":["calendar_read"],"tier":1}
+"send a quick hello message to my telegram" -> {"intent":"task","complexity":2,"domains":[],"tools_needed":["send_message"],"tier":2}
 "send me whats ai and ml on telegram" -> {"intent":"task","complexity":2,"domains":[],"tools_needed":["send_message"],"tier":2}
 "send me a test msg" -> {"intent":"task","complexity":2,"domains":[],"tools_needed":["send_message"],"tier":2}
+"send me today's news on telegram" -> {"intent":"task","complexity":3,"domains":[],"tools_needed":["web_search","send_message"],"tier":3}
 "write a python script to scrape a website" -> {"intent":"code","complexity":3,"domains":[],"tools_needed":[],"tier":3}
+"find top AI news today and send me a summary on telegram" -> {"intent":"task","complexity":3,"domains":[],"tools_needed":["web_search","send_message"],"tier":3}
+"get weather for tomorrow and set a morning reminder" -> {"intent":"task","complexity":3,"domains":[],"tools_needed":["web_search","set_timer"],"tier":3}
+"reschedule my 3pm meeting and remind me 30 mins before" -> {"intent":"task","complexity":3,"domains":["events"],"tools_needed":["calendar_write","set_timer"],"tier":3}
 
-Classify this: {message}
-"""
+
+Classify this: {message}"""
 
 
 # ─── classifier ───────────────────────────────────────────────────────────────
@@ -204,7 +222,7 @@ class Classifier:
             No LLM call, no latency, no cost.
 
         Slow path:
-            Everything else → tier-1 LLM (phi) classification.
+            Everything else → tier-2 LLM classification.
 
         Returns:
             intent       — what the user wants
@@ -228,7 +246,7 @@ class Classifier:
         try:
             raw = await self.llm.complete(
                 messages=[{"role": "user", "content": prompt}],
-                tier=1,
+                tier=2,
                 timeout=10.0,  # classifier must be fast — hard limit
             )
             result = self._parse(raw)
@@ -249,3 +267,4 @@ class Classifier:
 # ─── singleton ────────────────────────────────────────────────────────────────
 
 classifier = Classifier()
+
