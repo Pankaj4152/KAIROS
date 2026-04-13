@@ -20,6 +20,12 @@ Two tool patterns:
                      LLM sees tool schemas, decides mid-response to call one,
                      we execute it, feed result back, LLM gives final answer.
                      This is the standard tool-use / function-calling loop.
+
+Resilience features:
+    - Stream-tier fallback: streaming falls back tier 3 → 2 → 1
+    - Tool-loop tier fallback: tool calling falls back per round
+    - Session history wrapper: history errors don't block responses
+    - Max rounds degradation: falls back to plain generation when max rounds hit
 """
 
 import asyncio
@@ -34,7 +40,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from gateway.normalizer import KairosEvent
-from llm.client import LLMClient
+from llm.client import LLMClient, LLMError
 from memory.session_store import get_history
 from memory.writeback import run_writeback
 from memory.vector_store import search_as_context
@@ -56,7 +62,10 @@ PRE_LLM_TOOLS = {"web_search"}
 
 # Max tool-call rounds before we stop looping.
 # Prevents infinite loops if the LLM keeps requesting tools.
-MAX_TOOL_ROUNDS = 5
+MAX_TOOL_ROUNDS = int(os.getenv("MAX_TOOL_ROUNDS", "5"))
+
+# Safe fallback message when all recovery attempts fail
+FALLBACK_MESSAGE = "I'm having difficulty responding right now. Please try again."
 
 
 class Orchestrator:
@@ -77,7 +86,7 @@ class Orchestrator:
         self.data_dir   = data_dir or os.getenv("DATA_DIR", "./data")
         self._profile: str | None = None
 
-    # ─── startup ──────────────────────────────────────────────────────────────
+    # ─── startup ─────────────────────────────────────────────────────────────────
 
     async def startup(self) -> None:
         if self._profile is not None:
@@ -90,7 +99,7 @@ class Orchestrator:
             self._profile = "You are Kairos, a personal AI assistant."
         logger.debug("Profile loaded (%d chars)", len(self._profile))
 
-    # ─── context assembly ─────────────────────────────────────────────────────
+    # ─── context assembly ─────────────────────────────────────────────────────────
 
     async def _build_context(self, domains: list[str], query_text: str) -> str:
         coros = []
@@ -171,7 +180,7 @@ class Orchestrator:
             logger.warning("fetch_spending failed: %s", e)
             return None
 
-    # ─── pre-LLM tools ────────────────────────────────────────────────────────
+    # ─── pre-LLM tools ────────────────────────────────────────────────────────────
 
     async def _run_pre_llm_tools(self, tools_needed: list[str], query: str) -> str:
         """
@@ -211,7 +220,123 @@ class Orchestrator:
 
         return "\n\n".join(blocks)
 
-    # ─── agentic tool loop ────────────────────────────────────────────────────
+    # ─── stream with tier fallback (ENHANCEMENT #1) ────────────────────────────────
+
+    async def _stream_with_tier_fallback(
+        self,
+        messages: list[dict],
+        tier: int,
+        timeout: float = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Stream response with automatic tier fallback.
+        
+        Attempts to stream at current tier, falls back to lower tiers on LLMError.
+        Yields tokens as they arrive; if all tiers fail, yields safe fallback message.
+        
+        This provides graceful degradation:
+          - Tier 3 (Gemini) down → Falls back to tier 2 (Llama)
+          - Tier 2 (Ollama) down → Falls back to tier 1 (Phi)
+          - Tier 1 down → Yields FALLBACK_MESSAGE
+        
+        Args:
+            messages: OpenAI-format message list
+            tier: Starting tier (3=cloud, 2=local llama, 1=local phi)
+            timeout: Optional timeout override (uses LLM client default if None)
+        """
+        from llm.client import STREAM_TIMEOUT
+        
+        if timeout is None:
+            timeout = STREAM_TIMEOUT
+        
+        # Try tiers in order: current tier, then downgrade to lower tiers
+        tiers_to_try = []
+        if tier >= 3:
+            tiers_to_try = [3, 2, 1]
+        elif tier == 2:
+            tiers_to_try = [2, 1]
+        else:
+            tiers_to_try = [1]
+        
+        last_error: Exception | None = None
+        
+        for attempt_tier in tiers_to_try:
+            try:
+                logger.info(
+                    "Stream attempt starting  tier=%d timeout=%.1fs",
+                    attempt_tier, timeout,
+                )
+                t0 = time.perf_counter()
+                token_count = 0
+                
+                async for token in self.llm.stream(
+                    messages, tier=attempt_tier, timeout=timeout
+                ):
+                    yield token
+                    token_count += 1
+                
+                logger.info(
+                    "Stream succeeded  tier=%d tokens=%d duration=%.2fs",
+                    attempt_tier, token_count, time.perf_counter() - t0,
+                )
+                return  # Success - exit immediately
+                
+            except LLMError as e:
+                last_error = e
+                logger.warning(
+                    "Stream failed at tier=%d: %s, attempting fallback",
+                    attempt_tier, e,
+                )
+                
+                # If this was the last tier, give up gracefully
+                if attempt_tier == 1:
+                    logger.error(
+                        "Stream exhausted all tiers, last error: %s", last_error
+                    )
+                    yield FALLBACK_MESSAGE
+                    return
+                
+                # Otherwise, try next tier (loop continues)
+                continue
+        
+        # Should not reach here, but just in case
+        yield FALLBACK_MESSAGE
+
+    # ─── safe session history wrapper (ENHANCEMENT #4) ─────────────────────────────
+
+    async def _safe_get_history(
+        self, session_id: str, last_n: int = 8
+    ) -> list[dict]:
+        """
+        Fetch session history with graceful fallback to empty history.
+        
+        Session read errors (corrupted file, I/O error, etc.) do not block
+        the response. The request continues with empty history, allowing the
+        user to still get an answer.
+        
+        This prevents cascading failures where a corrupted session file
+        causes the entire response pipeline to fail.
+        
+        Args:
+            session_id: Which session to fetch
+            last_n: How many turns to retrieve
+        
+        Returns:
+            List of OpenAI-format message dicts, or empty list on error
+        """
+        try:
+            history = await get_history(session_id, last_n=last_n)
+            logger.debug("Session history loaded successfully: %d turns", len(history))
+            return history
+            
+        except Exception as e:
+            logger.warning(
+                "Failed to fetch session history for %s: %s, continuing without history",
+                session_id[:8], e,
+            )
+            return []  # Empty history - request continues
+
+    # ─── agentic tool loop with tier fallback (ENHANCEMENT #2 + #3) ────────────────
 
     async def _run_tool_loop(
         self,
@@ -220,10 +345,18 @@ class Orchestrator:
         tools_needed: list[str],
     ) -> AsyncGenerator[str, None]:
         """
-        Agentic tool-use loop (Generator).
+        Agentic tool-use loop with tier fallback and graceful degradation.
+        
+        Flow:
+            1. Try tool calling rounds (MAX_TOOL_ROUNDS attempts)
+            2. Per round: try tiers 3→2→1 if tool-calling fails
+            3. If max rounds hit: fall back to plain generation
+            4. For plain generation: use stream with tier fallback
+        
         Yields strings (tokens) as they arrive from the LLM.
-
-        Final messages are available via current_messages (if needed).
+        
+        ENHANCEMENT #2: Tool round failures now gracefully downgrade tiers.
+        ENHANCEMENT #3: Max rounds exhaustion falls back to plain response.
         """
         from llm.client import STREAM_TIMEOUT
         response_timeout = STREAM_TIMEOUT
@@ -238,28 +371,71 @@ class Orchestrator:
             if s["name"] not in PRE_LLM_TOOLS and s["name"] in tools_needed
         ]
 
-        # If no agentic tools are available, real stream immediately
+        # If no agentic tools are available, stream immediately with tier fallback
         if not agentic_schemas:
-            async for token in self.llm.stream(
-                messages, tier=tier, timeout=response_timeout,
+            logger.debug("No agentic tools, streaming directly")
+            async for token in self._stream_with_tier_fallback(
+                messages, tier, timeout=response_timeout
             ):
                 yield token
             return
 
         current_messages = list(messages)
-        final_text = ""
+        current_tier = tier  # Track which tier succeeded for tool calls
 
-        # For tool rounds, we currently use complete() because tool blocks 
-        # need to be parsed as a whole. But we could technically stream the 
-        # final round after all tool results are in.
+        # Tool calling loop with max rounds
         for round_num in range(MAX_TOOL_ROUNDS):
-            response = await self.llm.complete_with_tools(
-                messages=current_messages,
-                tools=agentic_schemas,
-                tier=tier,
-                timeout=response_timeout,
-            )
+            response = None
+            tool_round_succeeded = False
             
+            # ENHANCEMENT #2: Try tool calling at current tier, fall back if needed
+            for attempt_tier in _get_tier_fallback_sequence(current_tier):
+                try:
+                    logger.info(
+                        "Tool round %d: attempting complete_with_tools at tier=%d",
+                        round_num + 1, attempt_tier,
+                    )
+                    
+                    response = await self.llm.complete_with_tools(
+                        messages=current_messages,
+                        tools=agentic_schemas,
+                        tier=attempt_tier,
+                        timeout=response_timeout,
+                    )
+                    
+                    current_tier = attempt_tier  # Remember successful tier
+                    tool_round_succeeded = True
+                    logger.info("Tool round %d succeeded at tier=%d", round_num + 1, attempt_tier)
+                    break  # Exit fallback loop
+                    
+                except LLMError as e:
+                    logger.warning(
+                        "Tool round %d failed at tier=%d: %s",
+                        round_num + 1, attempt_tier, e,
+                    )
+                    
+                    if attempt_tier == 1:
+                        # All tiers exhausted for this round
+                        logger.error(
+                            "Tool round %d: all tiers exhausted, degrading to plain generation",
+                            round_num + 1,
+                        )
+                        # Fall through to degradation path below
+                        break
+            
+            # If tool calling failed completely, degrade to plain generation
+            if not tool_round_succeeded:
+                logger.warning(
+                    "Tool calling failed at all tiers in round %d, degrading to plain generation",
+                    round_num + 1,
+                )
+                async for token in self._stream_with_tier_fallback(
+                    current_messages, current_tier, timeout=response_timeout
+                ):
+                    yield token
+                return
+            
+            # Parse tool calls from response
             tool_calls = [
                 block for block in response.get("content", [])
                 if block.get("type") == "tool_use"
@@ -267,10 +443,10 @@ class Orchestrator:
 
             if not tool_calls:
                 # No tool calls — LLM gave a final text response.
-                # Fake stream it for the loop interface.
-                text = _extract_text(response)
+                text = _extract_text(response)  # response already has the right format
                 for i in range(0, len(text), 10):
                     yield text[i:i+10]
+                logger.info("Tool loop completed with final text response at round %d", round_num + 1)
                 break
 
             # Append LLM's tool-calling response to messages
@@ -316,12 +492,23 @@ class Orchestrator:
             logger.debug("Tool loop round %d complete, looping back", round_num + 1)
 
         else:
-            # Hit MAX_TOOL_ROUNDS without getting a final response.
-            # Generator should yield tokens, not return them.
-            logger.warning("Tool loop hit MAX_TOOL_ROUNDS=%d, forcing stop", MAX_TOOL_ROUNDS)
-            yield "I ran into an issue completing that request. Please try again."
+            # ENHANCEMENT #3: Hit MAX_TOOL_ROUNDS without getting a final response.
+            # Fall back to plain generation instead of hard failure.
+            logger.warning(
+                "Tool loop exhausted MAX_TOOL_ROUNDS=%d, degrading to plain generation",
+                MAX_TOOL_ROUNDS,
+            )
+            
+            try:
+                async for token in self._stream_with_tier_fallback(
+                    current_messages, current_tier, timeout=response_timeout
+                ):
+                    yield token
+            except Exception as e:
+                logger.error("Final fallback also failed: %s", e)
+                yield FALLBACK_MESSAGE
 
-    # ─── prompt assembly ──────────────────────────────────────────────────────
+    # ─── prompt assembly ──────────────────────────────────────────────────────────
 
     def _build_system_prompt(self, context: str) -> str:
         profile = self._profile or "You are Kairos, a personal AI assistant."
@@ -349,10 +536,12 @@ Guidelines:
         """
         Assemble the full messages list for the first LLM call.
         Context fetch, pre-LLM tools, and history all run in parallel.
+        
+        Uses safe_get_history (ENHANCEMENT #4) so history errors don't block response.
         """
         context_task = self._build_context(domains, event.text)
         tools_task   = self._run_pre_llm_tools(tools_needed, event.text)
-        history_task = get_history(event.session_id, last_n=8)
+        history_task = self._safe_get_history(event.session_id, last_n=8)
 
         context, tool_results, history = await asyncio.gather(
             context_task,
@@ -370,7 +559,7 @@ Guidelines:
             {"role": "user", "content": event.text},
         ]
 
-    # ─── main entry point ─────────────────────────────────────────────────────
+    # ─── main entry point ─────────────────────────────────────────────────────────
 
     async def process(self, event: KairosEvent) -> AsyncGenerator[str, None]:
         """
@@ -382,6 +571,12 @@ Guidelines:
             3. Tool loop — agentic tools: LLM calls tools, we execute, loop back
             4. Stream    — yield final response tokens
             5. Writeback — embed + session + facts in background
+        
+        With resilience enhancements:
+            - All streaming uses tier fallback
+            - Tool loop tiers fall back on error
+            - Max rounds degrade to plain generation
+            - Session history errors don't block response
         """
         t0 = time.perf_counter()
         sid = event.session_id[:8]
@@ -404,14 +599,14 @@ Guidelines:
             sid, tier, domains, tools_needed, time.perf_counter() - t_classify,
         )
 
-        # Step 2 — build initial messages
+        # Step 2 — build initial messages (with safe history fetch)
         messages = await self._build_messages(event, domains, tools_needed)
         logger.debug(
             "REQ BUILD  session=%s messages=%d",
             sid, len(messages),
         )
 
-        # Step 3 — agentic tool loop (Generator)
+        # Step 3 — agentic tool loop (with tier fallback and max rounds degradation)
         # Yields tokens as they arrive.
         t_tools = time.perf_counter()
         full_text = ""
@@ -439,7 +634,23 @@ Guidelines:
         )
 
 
-# ─── helpers ──────────────────────────────────────────────────────────────────
+# ─── helpers ──────────────────────────────────────────────────────────────────────
+
+def _get_tier_fallback_sequence(tier: int) -> list[int]:
+    """
+    Return the sequence of tiers to try for fallback.
+    
+    If current tier is 3, try [3, 2, 1].
+    If current tier is 2, try [2, 1].
+    If current tier is 1, try [1].
+    """
+    if tier >= 3:
+        return [3, 2, 1]
+    elif tier == 2:
+        return [2, 1]
+    else:
+        return [1]
+
 
 def _today() -> str:
     """Today's date in YYYY-MM-DD format."""
@@ -451,10 +662,9 @@ def _extract_text(response: dict) -> str:
     """Pull plain text out of an Anthropic-style response dict."""
     parts = []
     for block in response.get("content", []):
-        if block.get("type") == "text":
-            parts.append(block["text"])
+        if isinstance(block, dict) and block.get("type") == "text":
+            parts.append(block.get("text", ""))
     return "".join(parts)
-
 
 def _stream_text(text: str, chunk_size: int = 10):
     """
@@ -466,6 +676,6 @@ def _stream_text(text: str, chunk_size: int = 10):
         yield text[i:i + chunk_size]
 
 
-# ─── singleton ────────────────────────────────────────────────────────────────
+# ─── singleton ───────────────────────────────────────────────────────────────────
 
 orchestrator = Orchestrator()

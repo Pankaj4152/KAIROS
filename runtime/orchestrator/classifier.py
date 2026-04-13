@@ -58,7 +58,7 @@ _CHITCHAT_RESULT: dict = {
 
 # Clamp classifier output to these sets — never trust raw model output blindly.
 # Unknown values are silently dropped, not passed downstream.
-VALID_DOMAINS = frozenset({"tasks", "events", "habits", "spending", "memory"})
+VALID_DOMAINS = frozenset({"tasks", "events", "habits", "spending", "memory", "messaging"})
 VALID_TOOLS   = frozenset({"web_search", "send_message"})
 VALID_INTENTS = frozenset({"question", "task", "reminder", "memory",
                            "chitchat", "search", "code"})
@@ -109,7 +109,7 @@ Valid domains (include ONLY if relevant, otherwise empty):
 
 Valid tools_needed (otherwise empty):
 - "web_search" — current info, news, prices, weather
-- "send_message" — send a message (use this for Telegram, WhatsApp, SMS, tests)
+- "send_message" — send a message (use this for Telegram)
 
 Examples:
 "hello" -> {"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}
@@ -126,17 +126,12 @@ Examples:
 "what's happening in AI this week?" -> {"intent":"search","complexity":2,"domains":[],"tools_needed":["web_search"],"tier":2}
 "what's the weather" -> {"intent":"search","complexity":2,"domains":[],"tools_needed":["web_search"],"tier":2}
 "search for latest AI news" -> {"intent":"search","complexity":2,"domains":[],"tools_needed":["web_search"],"tier":2}
-"add a meeting tomorrow at 3pm" -> {"intent":"task","complexity":2,"domains":["events"],"tools_needed":["calendar_write"],"tier":2}
-"what's on my calendar this week?" -> {"intent":"question","complexity":1,"domains":["events"],"tools_needed":["calendar_read"],"tier":1}
 "send a quick hello message to my telegram" -> {"intent":"task","complexity":2,"domains":[],"tools_needed":["send_message"],"tier":2}
 "send me whats ai and ml on telegram" -> {"intent":"task","complexity":2,"domains":[],"tools_needed":["send_message"],"tier":2}
 "send me a test msg" -> {"intent":"task","complexity":2,"domains":[],"tools_needed":["send_message"],"tier":2}
 "send me today's news on telegram" -> {"intent":"task","complexity":3,"domains":[],"tools_needed":["web_search","send_message"],"tier":3}
 "write a python script to scrape a website" -> {"intent":"code","complexity":3,"domains":[],"tools_needed":[],"tier":3}
 "find top AI news today and send me a summary on telegram" -> {"intent":"task","complexity":3,"domains":[],"tools_needed":["web_search","send_message"],"tier":3}
-"get weather for tomorrow and set a morning reminder" -> {"intent":"task","complexity":3,"domains":[],"tools_needed":["web_search","set_timer"],"tier":3}
-"reschedule my 3pm meeting and remind me 30 mins before" -> {"intent":"task","complexity":3,"domains":["events"],"tools_needed":["calendar_write","set_timer"],"tier":3}
-
 
 Classify this: {message}"""
 
@@ -246,7 +241,7 @@ class Classifier:
         try:
             raw = await self.llm.complete(
                 messages=[{"role": "user", "content": prompt}],
-                tier=2,
+                tier=1,
                 timeout=10.0,  # classifier must be fast — hard limit
             )
             result = self._parse(raw)
@@ -267,4 +262,3 @@ class Classifier:
 # ─── singleton ────────────────────────────────────────────────────────────────
 
 classifier = Classifier()
-

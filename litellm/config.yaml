@@ -2,11 +2,13 @@ model_list:
   - model_name: tier1
     litellm_params:
       model: ollama/phi:latest
+      # model: ollama/qwen2.5:3b
       api_base: http://localhost:11434
 
   - model_name: tier2
     litellm_params:
       model: ollama/llama3:latest
+      # model: ollama/mistral:latest
       api_base: http://localhost:11434
 
   - model_name: tier3
