@@ -24,6 +24,7 @@ from typing import AsyncGenerator
 
 import httpx
 from dotenv import load_dotenv
+from llm.debug import trace, debug_payload, debug_messages
 
 load_dotenv()
 
@@ -42,8 +43,9 @@ TIER_MODELS = {
 # Single source of truth for all timeouts.
 # stream() uses STREAM_TIMEOUT. complete() uses COMPLETE_TIMEOUT.
 # Internal calls (classifier, writeback) should pass a tighter override.
-STREAM_TIMEOUT   = float(os.getenv("LLM_STREAM_TIMEOUT",   "30"))
-COMPLETE_TIMEOUT = float(os.getenv("LLM_COMPLETE_TIMEOUT", "15"))
+
+COMPLETE_TIMEOUT = float(os.getenv("LLM_COMPLETE_TIMEOUT", "60"))  # ← Increase
+STREAM_TIMEOUT   = float(os.getenv("LLM_STREAM_TIMEOUT",   "60"))  # ← Increase
 
 # How many times to retry on transient failure before raising LLMError.
 # Covers: connection resets, 502/503 from proxy, temporary Ollama unavailability.
@@ -105,6 +107,13 @@ class LLMClient:
         url   = f"{self.base_url}/chat/completions"
         t0 = time.perf_counter()
         logger.debug("LLM stream start  model=%s tier=%d", model, tier)
+        trace(
+            "LLM.stream start model=%s tier=%d timeout=%.1f messages=%d",
+            model,
+            tier,
+            timeout,
+            len(messages),
+        )
 
         try:
             async with self._client.stream(
@@ -125,6 +134,7 @@ class LLMClient:
                         continue
                     data = line[6:]
                     if data.strip() == "[DONE]":
+                        trace("LLM.stream done marker received model=%s", model)
                         break
                     try:
                         chunk = json.loads(data)
@@ -136,19 +146,30 @@ class LLMClient:
                         continue
 
             logger.debug("LLM stream done   model=%s tier=%d duration=%.2fs", model, tier, time.perf_counter() - t0)
+            trace("LLM.stream completed model=%s tier=%d elapsed=%.2fs", model, tier, time.perf_counter() - t0)
 
         except httpx.HTTPStatusError as e:
+            trace(
+                "LLM.stream http_status_error model=%s tier=%d status=%d elapsed=%.2fs",
+                model,
+                tier,
+                e.response.status_code,
+                time.perf_counter() - t0,
+            )
             logger.warning("LLM stream error  model=%s tier=%d HTTP %d duration=%.2fs", model, tier, e.response.status_code, time.perf_counter() - t0)
             raise LLMError(
                 f"LiteLLM HTTP {e.response.status_code} on stream (tier={tier})"
             ) from e
         except httpx.TimeoutException:
+            trace("LLM.stream timeout model=%s tier=%d timeout=%.1f", model, tier, timeout)
             logger.warning("LLM stream timeout  model=%s tier=%d after %.2fs", model, tier, time.perf_counter() - t0)
             raise LLMError(f"Stream timed out after {timeout}s (tier={tier})") from None
         except httpx.RequestError as e:
+            trace("LLM.stream request_error model=%s tier=%d error=%s", model, tier, e)
             logger.warning("LLM stream unreachable  model=%s tier=%d error=%s", model, tier, e)
             raise LLMError(f"Could not reach LiteLLM at {self.base_url}: {e}") from e
 
+        
     async def complete(
         self,
         messages: list[dict],
@@ -156,79 +177,76 @@ class LLMClient:
         timeout: float = COMPLETE_TIMEOUT,
         retries: int = MAX_RETRIES,
     ) -> str:
-        """
-        Return the full response as a single string.
-
-        Use for internal calls: classifier, fact extractor, session compaction.
-        Retries automatically on transient failures (connection errors, 5xx).
-        Will NOT retry on 4xx — that's a prompt/auth bug.
-
-        Args:
-            messages: standard OpenAI-format message list.
-            tier:     which model tier to use (default 1 = local phi-3-mini).
-            timeout:  per-attempt timeout in seconds.
-            retries:  max retry attempts after first failure (0 = no retry).
-        """
+        """Return the full response as a single string."""
         model = self._resolve_model(tier)
         url   = f"{self.base_url}/chat/completions"
         last_error: Exception | None = None
         t0 = time.perf_counter()
-        logger.info("LLM complete start  model=%s tier=%d", model, tier)
-
+        
+        logger.info("LLM complete start  model=%s tier=%d timeout=%.1fs retries=%d", 
+                    model, tier, timeout, retries)
+        trace("Messages for %s: %s", model, messages)
+        
         for attempt in range(retries + 1):
-
             if attempt > 0:
-                # Exponential backoff: 1s, 2s, 4s, ...
                 delay = RETRY_BASE_DELAY * (2 ** (attempt - 1))
                 logger.warning(
                     "LLM complete retry  model=%s attempt=%d/%d delay=%.1fs error=%s",
                     model, attempt + 1, retries + 1, delay, last_error,
                 )
                 await asyncio.sleep(delay)
-
+            
             try:
+                request_payload = {
+                    "model": model, 
+                    "messages": messages, 
+                    "stream": False,
+                    "max_tokens": 2048,
+                }
+                trace("POST to %s with payload keys: %s", url, list(request_payload.keys()))
+                
                 response = await self._client.post(
                     url,
-                    json={
-                        "model": model, 
-                        "messages": messages, 
-                        "stream": False,
-                        "max_tokens": 2048, # default for complete()
-                    },
+                    json=request_payload,
                     timeout=timeout,
                 )
-
-                # 4xx = bad request — our bug, not transient. Raise immediately.
+                
+                trace("Response status: %d", response.status_code)
+                
                 if 400 <= response.status_code < 500:
+                    error_detail = response.text[:200] if hasattr(response, 'text') else "unknown"
+                    logger.error("4xx error from LiteLLM: %s", error_detail)
                     raise LLMError(
-                        f"LiteLLM HTTP {response.status_code} (tier={tier}) — check prompt/auth"
+                        f"LiteLLM HTTP {response.status_code} (tier={tier}) — {error_detail}"
                     )
-
-                response.raise_for_status()   # catches 5xx
-                result = response.json()["choices"][0]["message"]["content"]
+                
+                response.raise_for_status()
+                resp_json = response.json()
+                trace("Response JSON keys: %s", list(resp_json.keys()))
+                
+                result = resp_json["choices"][0]["message"]["content"]
+                
                 logger.info(
                     "LLM complete done   model=%s tier=%d duration=%.2fs chars=%d",
                     model, tier, time.perf_counter() - t0, len(result),
                 )
+                trace("Response text: %s...", result[:200])
                 return result
-
+                
             except LLMError:
-                raise   # 4xx errors — don't retry
-
+                raise
             except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as e:
                 last_error = e
-                continue  # retry
-
+                trace("Exception type: %s, message: %s", type(e).__name__, str(e)[:100])
+                continue
             except (KeyError, IndexError) as e:
                 raise LLMError(f"Unexpected LiteLLM response shape: {e}") from e
-
+        
         logger.error(
             "LLM complete FAILED  model=%s tier=%d attempts=%d duration=%.2fs error=%s",
             model, tier, retries + 1, time.perf_counter() - t0, last_error,
         )
-        raise LLMError(
-            f"LiteLLM failed after {retries + 1} attempts (tier={tier}): {last_error}"
-        )
+        raise LLMError(f"LiteLLM failed after {retries + 1} attempts (tier={tier}): {last_error}")
 
     async def complete_with_tools(
         self,
@@ -265,9 +283,18 @@ class LLMClient:
         last_error: Exception | None = None
         t0 = time.perf_counter()
         logger.info("LLM tools start  model=%s tier=%d tool_count=%d", model, tier, len(tools))
+        trace(
+            "LLM.tools start model=%s tier=%d timeout=%.1f retries=%d input_messages=%d",
+            model,
+            tier,
+            timeout,
+            retries,
+            len(messages),
+        )
 
         # Convert internal Anthropic-style messages to OpenAI-compatible messages.
         openai_messages = self._to_openai_tool_messages(messages)
+        trace("LLM.tools converted_messages=%d", len(openai_messages))
 
         # Convert tool schemas to OpenAI function format
         functions = [
@@ -289,6 +316,7 @@ class LLMClient:
         ]
 
         for attempt in range(retries + 1):
+            trace("LLM.tools attempt=%d/%d model=%s", attempt + 1, retries + 1, model)
 
             if attempt > 0:
                 delay = RETRY_BASE_DELAY * (2 ** (attempt - 1))
@@ -309,9 +337,11 @@ class LLMClient:
                     "tool_choice": "auto",
                     "max_tokens": 2048,
                 }
+                trace("LLM.tools post modern payload_keys=%s", list(request_payload.keys()))
                 response = await self._client.post(url, json=request_payload, timeout=timeout)
 
                 if response.status_code == 400:
+                    trace("LLM.tools modern 400, trying legacy functions payload")
                     legacy_payload = {
                         "model": model,
                         "messages": openai_messages,
@@ -321,6 +351,7 @@ class LLMClient:
                         "max_tokens": 2048,
                     }
                     response = await self._client.post(url, json=legacy_payload, timeout=timeout)
+                    trace("LLM.tools legacy response_status=%d", response.status_code)
 
                 if 400 <= response.status_code < 500:
                     detail = ""
@@ -328,6 +359,11 @@ class LLMClient:
                         detail = response.text[:300]
                     except Exception:
                         detail = ""
+                    trace(
+                        "LLM.tools client_error status=%d detail_preview=%r",
+                        response.status_code,
+                        detail[:120],
+                    )
                     raise LLMError(
                         f"LiteLLM HTTP {response.status_code} (tier={tier}) — check prompt/auth. {detail}"
                     )
@@ -337,6 +373,11 @@ class LLMClient:
                 # Convert OpenAI response to Anthropic format
                 result = self._convert_to_anthropic_format(
                     response.json()["choices"][0]["message"]
+                )
+                trace(
+                    "LLM.tools converted_result_blocks=%d elapsed=%.2fs",
+                    len(result.get("content", [])),
+                    time.perf_counter() - t0,
                 )
                 logger.info(
                     "LLM tools done   model=%s tier=%d duration=%.2fs blocks=%d",
@@ -349,6 +390,7 @@ class LLMClient:
 
             except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as e:
                 last_error = e
+                trace("LLM.tools transient_error type=%s message=%s", type(e).__name__, str(e)[:150])
                 continue
 
             except (KeyError, IndexError) as e:
@@ -357,6 +399,13 @@ class LLMClient:
         logger.error(
             "LLM tools FAILED  model=%s tier=%d attempts=%d duration=%.2fs error=%s",
             model, tier, retries + 1, time.perf_counter() - t0, last_error,
+        )
+        trace(
+            "LLM.tools failed model=%s tier=%d attempts=%d error=%s",
+            model,
+            tier,
+            retries + 1,
+            last_error,
         )
         raise LLMError(
             f"LiteLLM failed after {retries + 1} attempts (tier={tier}): {last_error}"
@@ -379,7 +428,7 @@ class LLMClient:
         Args:
             tiers: which tiers to warm. Defaults to [1, 2] (local Ollama models).
         """
-        warm_tiers = tiers or [1, 2]
+        warm_tiers = tiers or [1]
         warmup_msg = [{"role": "user", "content": "hi"}]
 
         for tier in warm_tiers:

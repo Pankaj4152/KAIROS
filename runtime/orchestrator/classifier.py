@@ -23,6 +23,7 @@ import re
 import time
 
 from llm.client import LLMClient
+from llm.debug import trace
 
 logger = logging.getLogger(__name__)
 
@@ -161,25 +162,38 @@ class Classifier:
         All of these are handled here. If parsing fails entirely,
         DEFAULT_RESULT is returned.
         """
+        trace("Classifier.parse start raw_len=%d raw_preview=%r", len(raw), raw[:200])
         text = raw.strip()
 
         # Strip markdown fences if phi3 ignored the prompt instruction
         if text.startswith("```"):
             lines = text.split("\n")
             text  = "\n".join(lines[1:-1]).strip()
+            trace("Classifier.parse stripped markdown fence")
 
         # Find the JSON object — handles preamble sentences
         start = text.find("{")
         end   = text.rfind("}") + 1
         if start == -1 or end == 0:
             logger.warning("Classifier: no JSON found in: %r", raw[:100])
+            trace("Classifier.parse fallback=default reason=no_json")
             return DEFAULT_RESULT.copy()
+
+        trace(
+            "Classifier.parse json_span start=%d end=%d slice_preview=%r",
+            start,
+            end,
+            text[start:end][:200],
+        )
 
         try:
             result = json.loads(text[start:end])
         except json.JSONDecodeError as e:
             logger.warning("Classifier: JSON parse failed: %s | raw: %r", e, raw[:100])
+            trace("Classifier.parse fallback=default reason=json_decode_error error=%s", e)
             return DEFAULT_RESULT.copy()
+
+        trace("Classifier.parse decoded=%s", result)
 
         # Build output — start from defaults, overwrite with valid parsed values
         final = DEFAULT_RESULT.copy()
@@ -206,6 +220,7 @@ class Classifier:
                 t for t in result["tools_needed"] if t in VALID_TOOLS
             ]
 
+        trace("Classifier.parse normalized=%s", final)
         return final
 
     async def classify(self, text: str) -> dict:
@@ -228,6 +243,7 @@ class Classifier:
         """
         # Fast path — regex catches trivial greetings before any LLM call
         if _CHITCHAT_RE.match(text):
+            trace("Classifier.classify fast_path matched text_preview=%r", text[:80])
             logger.info(
                 "Classified %r → chitchat (fast path, 0.00s)", text[:40],
             )
@@ -237,14 +253,29 @@ class Classifier:
         # Use str.replace, not .format() — user text may contain { } characters
         prompt = CLASSIFIER_PROMPT.replace("{message}", text)
         t0 = time.perf_counter()
+        trace(
+            "Classifier.classify slow_path start text_len=%d prompt_len=%d",
+            len(text),
+            len(prompt),
+        )
 
         try:
             raw = await self.llm.complete(
                 messages=[{"role": "user", "content": prompt}],
                 tier=1,
-                timeout=10.0,  # classifier must be fast — hard limit
+                timeout=30.0,  # classifier must be fast — hard limit
+            )
+            trace(
+                "Classifier.classify llm_raw_len=%d llm_raw_preview=%r",
+                len(raw),
+                raw[:200],
             )
             result = self._parse(raw)
+            trace(
+                "Classifier.classify result=%s elapsed=%.2fs",
+                result,
+                time.perf_counter() - t0,
+            )
             logger.info(
                 "Classified %r → %s (%.2fs)",
                 text[:40], result, time.perf_counter() - t0,
@@ -252,6 +283,12 @@ class Classifier:
             return result
 
         except Exception as e:
+            trace(
+                "Classifier.classify fallback=default elapsed=%.2fs error_type=%s error=%s",
+                time.perf_counter() - t0,
+                type(e).__name__,
+                e,
+            )
             logger.warning(
                 "Classifier failed, using default (%.2fs): %s",
                 time.perf_counter() - t0, e,

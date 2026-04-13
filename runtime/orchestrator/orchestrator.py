@@ -41,6 +41,7 @@ load_dotenv()
 
 from gateway.normalizer import KairosEvent
 from llm.client import LLMClient, LLMError
+from llm.debug import trace
 from memory.session_store import get_history
 from memory.writeback import run_writeback
 from memory.vector_store import search_as_context
@@ -90,8 +91,10 @@ class Orchestrator:
 
     async def startup(self) -> None:
         if self._profile is not None:
+            trace("Orchestrator.startup profile already loaded")
             return
         path = os.path.join(self.data_dir, "profile.md")
+        trace("Orchestrator.startup loading profile path=%s", path)
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 self._profile = f.read()
@@ -102,6 +105,7 @@ class Orchestrator:
     # ─── context assembly ─────────────────────────────────────────────────────────
 
     async def _build_context(self, domains: list[str], query_text: str) -> str:
+        trace("Orchestrator.build_context domains=%s query_preview=%r", domains, query_text[:120])
         coros = []
 
         if "tasks" in domains:
@@ -116,10 +120,12 @@ class Orchestrator:
             coros.append(search_as_context(query_text, top_k=5))
 
         if not coros:
+            trace("Orchestrator.build_context no domain coroutines")
             return ""
 
         results = await asyncio.gather(*coros, return_exceptions=True)
         blocks = [r for r in results if isinstance(r, str) and r.strip()]
+        trace("Orchestrator.build_context gathered=%d non_empty_blocks=%d", len(results), len(blocks))
         return "\n\n".join(blocks)
 
     async def _fetch_tasks_block(self) -> str | None:
@@ -191,6 +197,7 @@ class Orchestrator:
         are handled in the tool loop after the first LLM call.
         """
         pre_tools = [t for t in tools_needed if t in PRE_LLM_TOOLS]
+        trace("Orchestrator.pre_llm_tools requested=%s runnable=%s", tools_needed, pre_tools)
         if not pre_tools:
             return ""
 
@@ -207,6 +214,7 @@ class Orchestrator:
                 logger.warning("No input mapping for pre-LLM tool: %s", tool_name)
 
         if not coros:
+            trace("Orchestrator.pre_llm_tools no valid tool inputs")
             return ""
 
         results = await asyncio.gather(*coros, return_exceptions=True)
@@ -218,6 +226,7 @@ class Orchestrator:
             elif isinstance(result, str) and result.strip():
                 blocks.append(result)
 
+        trace("Orchestrator.pre_llm_tools completed tools=%s blocks=%d", names, len(blocks))
         return "\n\n".join(blocks)
 
     # ─── stream with tier fallback (ENHANCEMENT #1) ────────────────────────────────
@@ -259,6 +268,7 @@ class Orchestrator:
             tiers_to_try = [1]
         
         last_error: Exception | None = None
+        trace("Orchestrator.stream_fallback start preferred_tier=%d sequence=%s", tier, tiers_to_try)
         
         for attempt_tier in tiers_to_try:
             try:
@@ -279,10 +289,12 @@ class Orchestrator:
                     "Stream succeeded  tier=%d tokens=%d duration=%.2fs",
                     attempt_tier, token_count, time.perf_counter() - t0,
                 )
+                trace("Orchestrator.stream_fallback success tier=%d tokens=%d", attempt_tier, token_count)
                 return  # Success - exit immediately
                 
             except LLMError as e:
                 last_error = e
+                trace("Orchestrator.stream_fallback failure tier=%d error=%s", attempt_tier, e)
                 logger.warning(
                     "Stream failed at tier=%d: %s, attempting fallback",
                     attempt_tier, e,
@@ -293,6 +305,7 @@ class Orchestrator:
                     logger.error(
                         "Stream exhausted all tiers, last error: %s", last_error
                     )
+                    trace("Orchestrator.stream_fallback exhausted tiers last_error=%s", last_error)
                     yield FALLBACK_MESSAGE
                     return
                 
@@ -300,6 +313,7 @@ class Orchestrator:
                 continue
         
         # Should not reach here, but just in case
+        trace("Orchestrator.stream_fallback reached terminal fallback path")
         yield FALLBACK_MESSAGE
 
     # ─── safe session history wrapper (ENHANCEMENT #4) ─────────────────────────────
@@ -327,9 +341,11 @@ class Orchestrator:
         try:
             history = await get_history(session_id, last_n=last_n)
             logger.debug("Session history loaded successfully: %d turns", len(history))
+            trace("Orchestrator.safe_history loaded session=%s turns=%d", session_id[:8], len(history))
             return history
             
         except Exception as e:
+            trace("Orchestrator.safe_history fallback empty session=%s error=%s", session_id[:8], e)
             logger.warning(
                 "Failed to fetch session history for %s: %s, continuing without history",
                 session_id[:8], e,
@@ -360,6 +376,12 @@ class Orchestrator:
         """
         from llm.client import STREAM_TIMEOUT
         response_timeout = STREAM_TIMEOUT
+        trace(
+            "Orchestrator.tool_loop start tier=%d tools_needed=%s timeout=%.1f",
+            tier,
+            tools_needed,
+            response_timeout,
+        )
 
         tool_schemas = get_tool_schemas()
 
@@ -374,6 +396,7 @@ class Orchestrator:
         # If no agentic tools are available, stream immediately with tier fallback
         if not agentic_schemas:
             logger.debug("No agentic tools, streaming directly")
+            trace("Orchestrator.tool_loop no_agentic_tools streaming_direct")
             async for token in self._stream_with_tier_fallback(
                 messages, tier, timeout=response_timeout
             ):
@@ -387,6 +410,7 @@ class Orchestrator:
         for round_num in range(MAX_TOOL_ROUNDS):
             response = None
             tool_round_succeeded = False
+            trace("Orchestrator.tool_loop round=%d current_tier=%d", round_num + 1, current_tier)
             
             # ENHANCEMENT #2: Try tool calling at current tier, fall back if needed
             for attempt_tier in _get_tier_fallback_sequence(current_tier):
@@ -405,10 +429,21 @@ class Orchestrator:
                     
                     current_tier = attempt_tier  # Remember successful tier
                     tool_round_succeeded = True
+                    trace(
+                        "Orchestrator.tool_loop round=%d tier=%d complete_with_tools ok",
+                        round_num + 1,
+                        attempt_tier,
+                    )
                     logger.info("Tool round %d succeeded at tier=%d", round_num + 1, attempt_tier)
                     break  # Exit fallback loop
                     
                 except LLMError as e:
+                    trace(
+                        "Orchestrator.tool_loop round=%d tier=%d failed error=%s",
+                        round_num + 1,
+                        attempt_tier,
+                        e,
+                    )
                     logger.warning(
                         "Tool round %d failed at tier=%d: %s",
                         round_num + 1, attempt_tier, e,
@@ -425,6 +460,7 @@ class Orchestrator:
             
             # If tool calling failed completely, degrade to plain generation
             if not tool_round_succeeded:
+                trace("Orchestrator.tool_loop degrade_plain_generation round=%d", round_num + 1)
                 logger.warning(
                     "Tool calling failed at all tiers in round %d, degrading to plain generation",
                     round_num + 1,
@@ -444,6 +480,7 @@ class Orchestrator:
             if not tool_calls:
                 # No tool calls — LLM gave a final text response.
                 text = _extract_text(response)  # response already has the right format
+                trace("Orchestrator.tool_loop final_text round=%d chars=%d", round_num + 1, len(text))
                 for i in range(0, len(text), 10):
                     yield text[i:i+10]
                 logger.info("Tool loop completed with final text response at round %d", round_num + 1)
@@ -461,6 +498,12 @@ class Orchestrator:
                 tool_name  = call["name"]
                 tool_input = call["input"]
                 tool_id    = call["id"]
+                trace(
+                    "Orchestrator.tool_loop exec_tool round=%d name=%s keys=%s",
+                    round_num + 1,
+                    tool_name,
+                    list(tool_input.keys()),
+                )
 
                 logger.info(
                     "Agentic tool call [round %d]: %s inputs=%s",
@@ -482,6 +525,13 @@ class Orchestrator:
                     "content":     result,
                 })
 
+            trace(
+                "Orchestrator.tool_loop round=%d tool_calls=%d tool_results=%d",
+                round_num + 1,
+                len(tool_calls),
+                len(tool_results),
+            )
+
             # Feed tool results back to LLM as a user message
             # (Anthropic API requires tool results in a user turn)
             current_messages.append({
@@ -494,6 +544,7 @@ class Orchestrator:
         else:
             # ENHANCEMENT #3: Hit MAX_TOOL_ROUNDS without getting a final response.
             # Fall back to plain generation instead of hard failure.
+            trace("Orchestrator.tool_loop max_rounds_exhausted=%d", MAX_TOOL_ROUNDS)
             logger.warning(
                 "Tool loop exhausted MAX_TOOL_ROUNDS=%d, degrading to plain generation",
                 MAX_TOOL_ROUNDS,
@@ -505,6 +556,7 @@ class Orchestrator:
                 ):
                     yield token
             except Exception as e:
+                trace("Orchestrator.tool_loop final_plain_fallback_failed error=%s", e)
                 logger.error("Final fallback also failed: %s", e)
                 yield FALLBACK_MESSAGE
 
@@ -548,6 +600,12 @@ Guidelines:
             tools_task,
             history_task,
         )
+        trace(
+            "Orchestrator.build_messages context_chars=%d pretools_chars=%d history_turns=%d",
+            len(context),
+            len(tool_results),
+            len(history),
+        )
 
         combined = "\n\n".join(
             block for block in [context, tool_results] if block.strip()
@@ -580,46 +638,75 @@ Guidelines:
         """
         t0 = time.perf_counter()
         sid = event.session_id[:8]
+        trace(
+            "Orchestrator.process start session=%s channel=%s text_len=%d",
+            sid,
+            event.channel,
+            len(event.text),
+        )
+        
         logger.info(
             "REQ START  session=%s channel=%s text=%r",
             sid, event.channel, event.text[:60],
         )
-
+        logger.debug("Full request text: %r", event.text)
+        
         await self.startup()
-
+        
         # Step 1 — classify
         t_classify = time.perf_counter()
+        logger.debug("Step 1: Starting classification...")
         classification = await self.classifier.classify(event.text)
         tier         = classification.get("tier", 2)
         domains      = classification.get("domains", [])
         tools_needed = classification.get("tools_needed", [])
-
+        intent       = classification.get("intent", "unknown")
+        trace(
+            "Orchestrator.process classification session=%s intent=%s tier=%d domains=%s tools=%s",
+            sid,
+            intent,
+            tier,
+            domains,
+            tools_needed,
+        )
+        
         logger.info(
-            "REQ CLASSIFY  session=%s tier=%s domains=%s tools=%s duration=%.2fs",
-            sid, tier, domains, tools_needed, time.perf_counter() - t_classify,
+            "REQ CLASSIFY  session=%s intent=%s tier=%d domains=%s tools=%s duration=%.2fs",
+            sid, intent, tier, domains, tools_needed, time.perf_counter() - t_classify,
         )
-
-        # Step 2 — build initial messages (with safe history fetch)
+        logger.debug("Full classification: %s", classification)
+        
+        # Step 2 — build messages
+        logger.debug("Step 2: Building messages...")
+        t_build = time.perf_counter()
         messages = await self._build_messages(event, domains, tools_needed)
-        logger.debug(
-            "REQ BUILD  session=%s messages=%d",
-            sid, len(messages),
-        )
-
-        # Step 3 — agentic tool loop (with tier fallback and max rounds degradation)
-        # Yields tokens as they arrive.
+        trace("Orchestrator.process built_messages session=%s count=%d", sid, len(messages))
+        logger.debug("REQ BUILD  session=%s messages=%d duration=%.2fs", 
+                    sid, len(messages), time.perf_counter() - t_build)
+        for i, msg in enumerate(messages):
+            logger.debug("  Message %d: role=%s, content_len=%d", 
+                        i, msg.get("role"), len(str(msg.get("content", ""))))
+        
+        # Step 3 — tool loop
+        logger.debug("Step 3: Starting tool loop...")
         t_tools = time.perf_counter()
         full_text = ""
         async for token in self._run_tool_loop(messages, tier, tools_needed):
             full_text += token
             yield token
 
+        trace("Orchestrator.process response_complete session=%s chars=%d", sid, len(full_text))
+        
         logger.info(
-            "REQ DONE  session=%s total=%.2fs chars=%d",
-            sid, time.perf_counter() - t0, len(full_text),
+            "REQ DONE  session=%s total=%.2fs chars=%d classify=%.2fs build=%.2fs tools=%.2fs",
+            sid, time.perf_counter() - t0, len(full_text), 
+            time.perf_counter() - t_classify,
+            t_build - t_classify,
+            time.perf_counter() - t_tools,
         )
-
+        
         # Step 4 — writeback
+        logger.debug("Step 4: Starting writeback in background...")
         asyncio.create_task(
             run_writeback(
                 session_id=event.session_id,
@@ -627,11 +714,12 @@ Guidelines:
                 response_text=full_text,
                 channel=event.channel,
                 tier=tier,
-                intent=classification.get("intent", "question"),
+                intent=intent,
                 llm=self.llm,
                 data_dir=self.data_dir,
             )
         )
+        trace("Orchestrator.process writeback_scheduled session=%s", sid)
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────────

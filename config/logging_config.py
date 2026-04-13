@@ -57,6 +57,17 @@ _NOISY_LOGGERS = (
 )
 
 
+_TRACE_LEVEL = 5
+
+
+def _resolve_level(level_name: str, default_level: int) -> int:
+    """Resolve log level names, including custom TRACE."""
+    upper = level_name.upper()
+    if upper == "TRACE":
+        return _TRACE_LEVEL
+    return getattr(logging, upper, default_level)
+
+
 def setup_logging(level_override: str | None = None) -> None:
     """
     Configure the root logger with console + optional file handlers.
@@ -66,11 +77,11 @@ def setup_logging(level_override: str | None = None) -> None:
                         If None, reads LOG_LEVEL from env (default: INFO).
     """
     level_name = level_override or os.getenv("LOG_LEVEL", "INFO")
-    level = getattr(logging, level_name.upper(), logging.INFO)
+    level = _resolve_level(level_name, logging.INFO)
 
     # Console can run at a higher level than the file to keep terminal clean
     console_level_name = os.getenv("LOG_CONSOLE_LEVEL", level_name).upper()
-    console_level = getattr(logging, console_level_name, level)
+    console_level = _resolve_level(console_level_name, level)
 
     root = logging.getLogger()
 
