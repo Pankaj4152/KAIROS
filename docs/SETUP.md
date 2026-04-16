@@ -11,10 +11,10 @@
 | Requirement | Purpose |
 |-------------|---------|
 | Python 3.11+ | Runtime |
-| [Ollama](https://ollama.ai) | Local phi-3-mini inference (classifier) |
+| [Ollama](https://ollama.ai) | Local qwen2.5 tier models |
 | [LiteLLM](https://github.com/BerriAI/litellm) | Model proxy — all LLM calls go through this |
 | Telegram bot token | Telegram channel — get from [@BotFather](https://t.me/BotFather) |
-| Anthropic API key | Cloud models (Haiku + Sonnet) |
+| Gemini API key | Tier 3 cloud model (gemini-2.5-flash) |
 
 ---
 
@@ -38,7 +38,6 @@ Open `.env` and fill in your API keys. At minimum you need:
 
 | Key | Required for | Where to get it |
 |-----|-------------|-----------------|
-| `ANTHROPIC_API_KEY` | Tier 2 & 3 LLM calls | [console.anthropic.com](https://console.anthropic.com) |
 | `GEMINI_API_KEY` | Gemini models | [aistudio.google.dev](https://aistudio.google.dev) |
 | `TELEGRAM_BOT_TOKEN` | Telegram channel | [@BotFather](https://t.me/BotFather) |
 | `TELEGRAM_USER_ID` | Auth — locks bot to you | [@userinfobot](https://t.me/userinfobot) |
@@ -50,9 +49,8 @@ Optional keys (voice, search, calendar) can be added later. See [`.env.example`]
 #### LLM Providers
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | — | Anthropic API key for Haiku/Sonnet |
-| `OPENAI_API_KEY` | — | Only for text-embedding-3-small |
 | `GEMINI_API_KEY` | — | Google Gemini models |
+| `OPENAI_API_KEY` | — | Only for text-embedding-3-small |
 
 #### Voice (optional)
 | Variable | Default | Description |
@@ -74,6 +72,7 @@ Optional keys (voice, search, calendar) can be added later. See [`.env.example`]
 | `SEARCH_MAX_RESULTS` | `5` | Max search results per query |
 | `BRAVE_API_KEY` | — | Brave Search (optional) |
 | `TAVILY_API_KEY` | — | Tavily Search (optional) |
+| `SERPER_API_KEY` | — | Serper.dev search (optional) |
 | `GOOGLE_CALENDAR_CREDENTIALS_PATH` | `./data/gcal_creds.json` | Google Calendar credentials |
 
 #### Internal Services
@@ -160,7 +159,8 @@ Role: 3rd-year CS student, AI/ML + systems focus
 
 ```bash
 ollama serve
-ollama pull phi3               # ~2GB, first time only
+ollama pull qwen2.5:3b-instruct
+ollama pull qwen2.5:7b-instruct
 ```
 
 ---
@@ -191,6 +191,14 @@ Kairos is live
   WebUI    → http://localhost:8000
   Telegram → message your bot
 Press Ctrl+C to stop
+```
+
+### Diagnostics
+
+Use the latency probe to compare model routes directly against LiteLLM:
+
+```bash
+python runtime/latency_probe.py --models tier1 tier2 tier3
 ```
 
 ---

@@ -144,8 +144,8 @@ kairos/
 | Async | asyncio throughout |
 | Voice pipeline | Pipecat, Deepgram, Cartesia, silero-vad, Porcupine |
 | LLM routing | LiteLLM proxy |
-| Local inference | Ollama (phi-3-mini) |
-| Cloud LLMs | Anthropic (Haiku, Sonnet) |
+| Local inference | Ollama (qwen2.5:3b-instruct, qwen2.5:7b-instruct) |
+| Cloud LLMs | Gemini (gemini-2.5-flash) |
 | Channels | python-telegram-bot, FastAPI + WebSocket |
 | Database | SQLite + sqlite-vec |
 | Embeddings | text-embedding-3-small (OpenAI) or nomic-embed-text (Ollama) |

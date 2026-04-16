@@ -72,9 +72,9 @@ Every request is classified by a local model (free, ~100ms) before any cloud cal
 
 | Tier | Model | Cost | Latency | Use for |
 |------|-------|------|---------|---------|
-| 1 — Local | phi-3-mini via Ollama | Free | ~50ms | Classifier, formatting, trivial Q&A, write-back |
-| 2 — Fast cloud | claude-haiku-4-5 | Low | ~300ms | Most voice replies, calendar, web search synthesis |
-| 3 — Full power | claude-sonnet-4-6 | Higher | ~1s | Complex reasoning, code, research, multi-step planning |
+| 1 — Local | qwen2.5:3b-instruct via Ollama | Free | ~50ms | Classifier, formatting, trivial Q&A, write-back |
+| 2 — Local | qwen2.5:7b-instruct via Ollama | Free | ~150ms | Most routing, calendar, web search synthesis |
+| 3 — Cloud | gemini-2.5-flash | Low | ~300ms | Complex reasoning, code, research, multi-step planning |
 
 All LLM calls go through [LiteLLM](https://github.com/BerriAI/litellm) proxy. Models are swapped in `litellm/config.yaml` — no code changes needed.
 
@@ -192,11 +192,13 @@ These constraints are non-negotiable — they define what Kairos is:
 |-------|--------|------|
 | STT transcription | ~280ms | Deepgram streaming |
 | Context assembly | <50ms | SQLite parallel fetch |
-| Tier 1 response | ~50ms | phi-3-mini via Ollama |
-| Tier 2 first token | ~300ms | claude-haiku-4-5 |
+| Tier 1 response | ~50ms | qwen2.5:3b-instruct via Ollama |
+| Tier 2 first token | ~150ms | qwen2.5:7b-instruct via Ollama |
+| Tier 3 first token | ~300ms | gemini-2.5-flash |
 | TTS first chunk | ~80ms | Cartesia |
 | **Total (Tier 1)** | **<500ms** | end of speech to first audio |
 | **Total (Tier 2)** | **<700ms** | end of speech to first audio |
+| **Total (Tier 3)** | **<1200ms** | end of speech to first audio |
 
 ---
 

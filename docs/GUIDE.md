@@ -124,6 +124,8 @@ Real-time web search with pluggable backends.
 
 Switch backends in `.env` — DuckDuckGo (free, default), Brave, Tavily, or Serper. See [Architecture → Tool System](ARCHITECTURE.md#tool-system) for details.
 
+If you use Serper, set `SERPER_API_KEY` in `.env`. If `SEARCH_BACKEND` is unsupported, Kairos falls back to DuckDuckGo.
+
 <p align="center">
   <img src="images/chat_search.png" alt="Web search results" width="600">
 </p>

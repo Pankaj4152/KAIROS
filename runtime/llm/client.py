@@ -428,7 +428,7 @@ class LLMClient:
         Args:
             tiers: which tiers to warm. Defaults to [1, 2] (local Ollama models).
         """
-        warm_tiers = tiers or [1]
+        warm_tiers = tiers or [1, 2]
         warmup_msg = [{"role": "user", "content": "hi"}]
 
         for tier in warm_tiers:
