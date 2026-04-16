@@ -344,7 +344,7 @@
       <line x1="224" y1="200" x2="224" y2="238" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
       <line x1="568" y1="200" x2="568" y2="238" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
       <!-- L3 orchestrator -->
-      <g class="c-teal"><rect x="84" y="238" width="186" height="52" rx="8" stroke-width="0.5"/><text class="th" x="177" y="259" text-anchor="middle" dominant-baseline="central">Nano classifier</text><text class="ts" x="177" y="277" text-anchor="middle" dominant-baseline="central">phi-3-mini · &lt;100ms</text></g>
+      <g class="c-teal"><rect x="84" y="238" width="186" height="52" rx="8" stroke-width="0.5"/><text class="th" x="177" y="259" text-anchor="middle" dominant-baseline="central">Nano classifier</text><text class="ts" x="177" y="277" text-anchor="middle" dominant-baseline="central">qwen2.5:3b-instruct · &lt;100ms</text></g>
       <g class="c-teal"><rect x="284" y="238" width="186" height="52" rx="8" stroke-width="0.5"/><text class="th" x="377" y="259" text-anchor="middle" dominant-baseline="central">Context assembler</text><text class="ts" x="377" y="277" text-anchor="middle" dominant-baseline="central">Parallel domain fetch</text></g>
       <g class="c-teal"><rect x="484" y="238" width="274" height="52" rx="8" stroke-width="0.5"/><text class="th" x="621" y="259" text-anchor="middle" dominant-baseline="central">LiteLLM proxy</text><text class="ts" x="621" y="277" text-anchor="middle" dominant-baseline="central">Tier 1 · Tier 2 · Tier 3</text></g>
       <line x1="270" y1="264" x2="284" y2="264" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr1)"/>
@@ -401,7 +401,7 @@
       <line x1="315" y1="232" x2="315" y2="260" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr2)"/>
       <g class="c-gray"><rect x="160" y="260" width="310" height="52" rx="8" stroke-width="0.5"/><text class="th" x="315" y="281" text-anchor="middle" dominant-baseline="central">Channel normalizer</text><text class="ts" x="315" y="299" text-anchor="middle" dominant-baseline="central">KairosEvent · session resolved</text></g>
       <line x1="315" y1="312" x2="315" y2="340" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr2)"/>
-      <g class="c-teal"><rect x="160" y="340" width="310" height="52" rx="8" stroke-width="0.5"/><text class="th" x="315" y="361" text-anchor="middle" dominant-baseline="central">Nano classifier</text><text class="ts" x="315" y="379" text-anchor="middle" dominant-baseline="central">phi-3-mini · intent + tier + domains</text></g>
+      <g class="c-teal"><rect x="160" y="340" width="310" height="52" rx="8" stroke-width="0.5"/><text class="th" x="315" y="361" text-anchor="middle" dominant-baseline="central">Nano classifier</text><text class="ts" x="315" y="379" text-anchor="middle" dominant-baseline="central">qwen2.5:3b-instruct · intent + tier + domains</text></g>
       <line x1="315" y1="392" x2="315" y2="420" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr2)"/>
       <g class="c-teal"><rect x="160" y="420" width="310" height="52" rx="8" stroke-width="0.5"/><text class="th" x="315" y="441" text-anchor="middle" dominant-baseline="central">Context assembler</text><text class="ts" x="315" y="459" text-anchor="middle" dominant-baseline="central">Parallel SQLite fetch · &lt;50ms</text></g>
       <line x1="315" y1="472" x2="315" y2="500" stroke="#88887f" stroke-width="1.5" marker-end="url(#arr2)"/>
@@ -453,9 +453,9 @@
       <text class="ts" x="90" y="128" text-anchor="middle" dominant-baseline="central">Tier 1 — free</text>
       <text class="ts" x="340" y="128" text-anchor="middle" dominant-baseline="central">Tier 2 — fast</text>
       <text class="ts" x="590" y="128" text-anchor="middle" dominant-baseline="central">Tier 3 — full</text>
-      <g class="c-green"><rect x="18" y="140" width="144" height="60" rx="8" stroke-width="0.5"/><text class="th" x="90" y="161" text-anchor="middle" dominant-baseline="central">phi-3-mini</text><text class="ts" x="90" y="179" text-anchor="middle" dominant-baseline="central">Ollama · ~50ms</text></g>
-      <g class="c-amber"><rect x="268" y="140" width="144" height="60" rx="8" stroke-width="0.5"/><text class="th" x="340" y="161" text-anchor="middle" dominant-baseline="central">claude-haiku-4-5</text><text class="ts" x="340" y="179" text-anchor="middle" dominant-baseline="central">~300ms · low cost</text></g>
-      <g class="c-coral"><rect x="518" y="140" width="144" height="60" rx="8" stroke-width="0.5"/><text class="th" x="590" y="161" text-anchor="middle" dominant-baseline="central">claude-sonnet-4-6</text><text class="ts" x="590" y="179" text-anchor="middle" dominant-baseline="central">~1000ms · medium</text></g>
+      <g class="c-green"><rect x="18" y="140" width="144" height="60" rx="8" stroke-width="0.5"/><text class="th" x="90" y="161" text-anchor="middle" dominant-baseline="central">qwen2.5:3b-instruct</text><text class="ts" x="90" y="179" text-anchor="middle" dominant-baseline="central">Ollama · ~50ms</text></g>
+      <g class="c-amber"><rect x="268" y="140" width="144" height="60" rx="8" stroke-width="0.5"/><text class="th" x="340" y="161" text-anchor="middle" dominant-baseline="central">qwen2.5:7b-instruct</text><text class="ts" x="340" y="179" text-anchor="middle" dominant-baseline="central">Ollama · ~150ms</text></g>
+      <g class="c-coral"><rect x="518" y="140" width="144" height="60" rx="8" stroke-width="0.5"/><text class="th" x="590" y="161" text-anchor="middle" dominant-baseline="central">gemini-2.5-flash</text><text class="ts" x="590" y="179" text-anchor="middle" dominant-baseline="central">~300ms · low cost</text></g>
       <g class="c-green"><rect x="18" y="222" width="144" height="118" rx="8" stroke-width="0.5"/></g>
       <text class="ts" x="90" y="244" text-anchor="middle">Formatting</text>
       <text class="ts" x="90" y="262" text-anchor="middle">Simple Q&amp;A</text>
@@ -484,9 +484,9 @@
 
   <table class="key-table">
     <tr><th>Tier</th><th>Model</th><th>Latency</th><th>Cost</th></tr>
-    <tr><td>Tier 1</td><td>phi-3-mini via Ollama</td><td>~50ms</td><td>Free (local)</td></tr>
-    <tr><td>Tier 2</td><td>claude-haiku-4-5</td><td>~300ms first token</td><td>Low</td></tr>
-    <tr><td>Tier 3</td><td>claude-sonnet-4-6</td><td>~1000ms first token</td><td>Medium</td></tr>
+    <tr><td>Tier 1</td><td>qwen2.5:3b-instruct via Ollama</td><td>~50ms</td><td>Free (local)</td></tr>
+    <tr><td>Tier 2</td><td>qwen2.5:7b-instruct via Ollama</td><td>~150ms first token</td><td>Free (local)</td></tr>
+    <tr><td>Tier 3</td><td>gemini-2.5-flash</td><td>~300ms first token</td><td>Low</td></tr>
   </table>
 </section>
 
