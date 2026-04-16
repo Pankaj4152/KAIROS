@@ -22,6 +22,7 @@ import logging
 import re
 import time
 
+from config.settings import CLASSIFIER_TIMEOUT
 from llm.client import LLMClient
 from llm.debug import trace
 
@@ -46,13 +47,15 @@ _CHITCHAT_RE = re.compile(
     re.IGNORECASE,
 )
 
-_CHITCHAT_RESULT: dict = {
-    "intent":       "chitchat",
-    "complexity":   1,
-    "domains":      [],
-    "tools_needed": [],
-    "tier":         1,
-}
+def _chitchat_result() -> dict:
+    """Return a fresh chitchat routing result with non-shared list fields."""
+    return {
+        "intent":       "chitchat",
+        "complexity":   1,
+        "domains":      [],
+        "tools_needed": [],
+        "tier":         1,
+    }
 
 
 # ─── valid values ─────────────────────────────────────────────────────────────
@@ -70,13 +73,15 @@ VALID_INTENTS = frozenset({"question", "task", "reminder", "memory",
 # Returned on any classifier failure. tier=2 is the safe default:
 # if the classifier can't even parse the input, it's likely simple enough
 # for the local model. Truly complex queries produce parseable JSON.
-DEFAULT_RESULT: dict = {
-    "intent":       "question",
-    "complexity":   1,
-    "domains":      [],
-    "tools_needed": [],
-    "tier":         2,
-}
+def _default_result() -> dict:
+    """Return a fresh fallback result with non-shared list fields."""
+    return {
+        "intent":       "question",
+        "complexity":   1,
+        "domains":      [],
+        "tools_needed": [],
+        "tier":         2,
+    }
 
 
 # ─── prompt ───────────────────────────────────────────────────────────────────
@@ -177,7 +182,7 @@ class Classifier:
         if start == -1 or end == 0:
             logger.warning("Classifier: no JSON found in: %r", raw[:100])
             trace("Classifier.parse fallback=default reason=no_json")
-            return DEFAULT_RESULT.copy()
+            return _default_result()
 
         trace(
             "Classifier.parse json_span start=%d end=%d slice_preview=%r",
@@ -186,17 +191,18 @@ class Classifier:
             text[start:end][:200],
         )
 
+        # try to convert the JSON substring into a dict. If this fails, return defaults.
         try:
             result = json.loads(text[start:end])
         except json.JSONDecodeError as e:
             logger.warning("Classifier: JSON parse failed: %s | raw: %r", e, raw[:100])
             trace("Classifier.parse fallback=default reason=json_decode_error error=%s", e)
-            return DEFAULT_RESULT.copy()
+            return _default_result()
 
         trace("Classifier.parse decoded=%s", result)
 
         # Build output — start from defaults, overwrite with valid parsed values
-        final = DEFAULT_RESULT.copy()
+        final = _default_result()
 
         # Scalar fields — coerce to correct types
         if "intent" in result and result["intent"] in VALID_INTENTS:
@@ -239,7 +245,7 @@ class Classifier:
             complexity   — 1/2/3 (depth of response needed)
             domains      — which SQLite stores to query
             tools_needed — which tools to invoke before the LLM call
-            tier         — which model to use (1=local, 2=haiku, 3=sonnet)
+            tier         — which model to use
         """
         # Fast path — regex catches trivial greetings before any LLM call
         if _CHITCHAT_RE.match(text):
@@ -247,7 +253,7 @@ class Classifier:
             logger.info(
                 "Classified %r → chitchat (fast path, 0.00s)", text[:40],
             )
-            return _CHITCHAT_RESULT.copy()
+            return _chitchat_result()
 
         # Slow path — LLM-based classification
         # Use str.replace, not .format() — user text may contain { } characters
@@ -260,10 +266,11 @@ class Classifier:
         )
 
         try:
+            # Set a timeout for the classifier call from centralized settings.
             raw = await self.llm.complete(
                 messages=[{"role": "user", "content": prompt}],
                 tier=1,
-                timeout=30.0,  # classifier must be fast — hard limit
+                timeout=CLASSIFIER_TIMEOUT,
             )
             trace(
                 "Classifier.classify llm_raw_len=%d llm_raw_preview=%r",
@@ -293,7 +300,7 @@ class Classifier:
                 "Classifier failed, using default (%.2fs): %s",
                 time.perf_counter() - t0, e,
             )
-            return DEFAULT_RESULT.copy()
+            return _default_result()
 
 
 # ─── singleton ────────────────────────────────────────────────────────────────

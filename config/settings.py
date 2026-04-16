@@ -1,3 +1,9 @@
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 
 # Normalizer
@@ -20,3 +26,7 @@ LOG_FORMAT       = "%(asctime)s  %(name)-20s  %(levelname)-7s  %(message)s"
 LOG_DATE_FORMAT  = "%Y-%m-%d %H:%M:%S"
 LOG_MAX_BYTES    = 5 * 1024 * 1024   # 5 MB per log file before rotation
 LOG_BACKUP_COUNT = 3                 # keep 3 rotated backups
+
+
+# Classifier
+CLASSIFIER_TIMEOUT = float(os.getenv("CLASSIFIER_TIMEOUT", "10"))

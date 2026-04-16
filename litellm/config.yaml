@@ -1,19 +1,15 @@
 model_list:
   - model_name: tier1
     litellm_params:
-      model: ollama/phi:latest
-      # Fast (5.6s), accurate enough for classification
+      model: ollama/qwen2.5:3b-instruct
       api_base: http://localhost:11434
 
   - model_name: tier2
     litellm_params:
-      model: ollama/qwen2.5:3b
-      # Smaller than mistral (1.9GB), better quality than phi
-      # Expected: ~15-20s per response
+      model: ollama/qwen2.5:7b-instruct
       api_base: http://localhost:11434
 
   - model_name: tier3
     litellm_params:
       model: gemini/gemini-2.5-flash
-      # Cloud backup for complex queries
       api_key: os.environ/GEMINI_API_KEY

@@ -101,6 +101,7 @@ Optional keys (voice, search, calendar) can be added later. See [`.env.example`]
 |----------|---------|-------------|
 | `LLM_STREAM_TIMEOUT` | `30` | Streaming response timeout (seconds) |
 | `LLM_COMPLETE_TIMEOUT` | `15` | Non-streaming response timeout |
+| `CLASSIFIER_TIMEOUT` | `10` | Tier-1 classifier timeout (seconds) |
 | `LLM_MAX_RETRIES` | `2` | Retry attempts on failure |
 
 #### Scheduling
