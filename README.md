@@ -15,6 +15,7 @@ Listens for a wake word at home, accepts text via Telegram when you're out, acce
 - **Browser UI** — works from any device on your LAN or via Tailscale
 - **Persistent memory** — tasks, events, habits, spending, conversation history
 - **Three-tier model routing** — free local model for simple things, cloud only when needed
+- **Resilience first** — tier fallback, safe degradation, and guarded tool execution
 - **Proactive** — daily briefings, reminders, scheduled tasks without being asked
 
 ---
@@ -95,8 +96,17 @@ cd runtime && python main.py # terminal 3
 | **[Architecture](docs/ARCHITECTURE.md)** | Request pipeline, memory system, model routing, design rules |
 | **[Architecture HTML](docs/architecture.html)** | 7 interactive SVG diagrams — open locally or via GitHub Pages |
 | **[Architecture PDF](docs/kairos_architecture.pdf)** | Printable/shareable version of all architecture diagrams |
+| **[Resilience](docs/RESILIENCE.md)** | Fallback paths, error recovery strategy, and resilience knobs |
 | **[Setup Guide](docs/SETUP.md)** | Installation, configuration, environment variables, deployment |
 | **[Contributing](docs/CONTRIBUTING.md)** | How to add channels, tools, search backends, and memory domains |
+| **[Releases](RELEASES.md)** | Version history and release highlights |
+
+---
+
+## Mark 2
+
+Mark 2 introduces resilience-focused behavior: automatic tier fallback, safer tool-loop degradation, and clearer operational diagnostics.
+See [Release Notes (Mark 2)](docs/RELEASE_NOTES_MARK2.md) and [Version History](RELEASES.md).
 
 ---
 

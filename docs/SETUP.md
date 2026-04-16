@@ -103,6 +103,15 @@ Optional keys (voice, search, calendar) can be added later. See [`.env.example`]
 | `CLASSIFIER_TIMEOUT` | `10` | Tier-1 classifier timeout (seconds) |
 | `LLM_MAX_RETRIES` | `2` | Retry attempts on failure |
 
+#### Resilience
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MAX_TOOL_ROUNDS` | `5` | Max tool-calling rounds before degrading to plain generation |
+<!-- | `TOOL_CALL_MAX_RETRIES` | `2` | Retry attempts for transient tool-call failures |
+| `TOOL_CALL_RETRY_BASE_DELAY` | `0.5` | Exponential backoff base delay (seconds) |
+| `TOOL_CIRCUIT_BREAKER_FAILURE_THRESHOLD` | `3` | Consecutive failures before opening tool circuit |
+| `TOOL_CIRCUIT_BREAKER_COOLDOWN_SECONDS` | `60` | Cooldown before retrying an open-circuit tool | -->
+
 #### Scheduling
 | Variable | Default | Description |
 |----------|---------|-------------|

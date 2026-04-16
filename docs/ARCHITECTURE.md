@@ -82,6 +82,56 @@ All LLM calls go through [LiteLLM](https://github.com/BerriAI/litellm) proxy. Mo
 
 ---
 
+## Resilience & Fallback Strategies
+
+Kairos is designed to degrade gracefully instead of failing hard.
+
+- Streaming fallback sequence: tier 3 -> tier 2 -> tier 1
+- Tool-loop fallback sequence: each tool round retries lower tiers
+- Session-history safety wrapper: history read errors become empty history
+- Max tool-round degradation: if rounds are exhausted, fallback to plain generation
+- Final user-safe output: return a safe fallback message when all recovery paths fail
+
+### Tier Fallback Flow
+
+```
+Preferred tier from classifier
+                |
+                v
+          Try Tier N
+                |
+      +-----+-----+
+      |           |
+ success      failure
+      |           |
+ stream      Try next lower tier
+ output         |
+                          v
+                     Tier 3 -> 2 -> 1
+                          |
+               all tiers exhausted
+                          |
+                          v
+               Return safe fallback message
+```
+
+---
+
+## Error Classification & Recovery
+
+| Failure class | Typical source | Recovery |
+|---------------|----------------|----------|
+| Transient network/timeout | LiteLLM or upstream API timeout | Retry with exponential backoff (`LLM_MAX_RETRIES`) |
+| Classifier parse/output failure | Invalid JSON or malformed fields | Clamp/drop invalid fields; fallback to safe default route |
+| Session-history read failure | File/IO/session-store issues | Continue request with empty history |
+| Tool input/schema failure | Invalid tool arguments from model | Reject tool call and continue safely |
+| Tool handler timeout | Slow backend/tool service | Return tool error string and continue response path |
+| Exhausted tool rounds | Repeated tool calls without final answer | Degrade to plain generation with fallback tiers |
+
+Resilience knobs are configured in `.env` and documented in [Setup](SETUP.md) and [Resilience](RESILIENCE.md).
+
+---
+
 ## Classifier
 
 The classifier runs on **every request** and outputs:

@@ -30,3 +30,11 @@ LOG_BACKUP_COUNT = 3                 # keep 3 rotated backups
 
 # Classifier
 CLASSIFIER_TIMEOUT = float(os.getenv("CLASSIFIER_TIMEOUT", "10"))
+
+
+# Orchestrator / tool-loop resilience
+# TOOL_CALL_MAX_RETRIES = int(os.getenv("TOOL_CALL_MAX_RETRIES", "2"))
+# TOOL_CALL_RETRY_BASE_DELAY = float(os.getenv("TOOL_CALL_RETRY_BASE_DELAY", "0.5"))
+# TOOL_CIRCUIT_BREAKER_FAILURE_THRESHOLD = int(os.getenv("TOOL_CIRCUIT_BREAKER_FAILURE_THRESHOLD", "3"))
+# TOOL_CIRCUIT_BREAKER_COOLDOWN_SECONDS = int(os.getenv("TOOL_CIRCUIT_BREAKER_COOLDOWN_SECONDS", "60"))
+MAX_TOOL_ROUNDS = int(os.getenv("MAX_TOOL_ROUNDS", "5"))

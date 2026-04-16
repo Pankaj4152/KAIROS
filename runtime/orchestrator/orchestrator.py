@@ -36,6 +36,7 @@ import time
 from typing import AsyncGenerator
 
 from dotenv import load_dotenv
+from config.settings import MAX_TOOL_ROUNDS
 
 load_dotenv()
 
@@ -60,10 +61,6 @@ logger = logging.getLogger(__name__)
 # Tools the classifier pre-fetches before the LLM call.
 # Everything else goes through the agentic loop.
 PRE_LLM_TOOLS = {"web_search"}
-
-# Max tool-call rounds before we stop looping.
-# Prevents infinite loops if the LLM keeps requesting tools.
-MAX_TOOL_ROUNDS = int(os.getenv("MAX_TOOL_ROUNDS", "5"))
 
 # Safe fallback message when all recovery attempts fail
 FALLBACK_MESSAGE = "I'm having difficulty responding right now. Please try again."
