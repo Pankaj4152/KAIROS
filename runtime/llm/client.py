@@ -82,8 +82,15 @@ class LLMClient:
         self.base_url    = (base_url or os.getenv("LITELLM_BASE_URL", "http://localhost:4000")).rstrip("/")
         self.tier_models = tier_models or TIER_MODELS
 
+        self.master_key  = os.getenv("GATEWAY_MASTER_KEY", "")
+
+        # 2. Build the correct Bearer token dictionary
+        headers = {}
+        if self.master_key:
+            headers["Authorization"] = f"Bearer {self.master_key}"
+            
         # One connection pool shared across all requests — never create per-call
-        self._client = httpx.AsyncClient(timeout=60.0)
+        self._client = httpx.AsyncClient(headers=headers, timeout=60.0)
 
     # ─── public API ───────────────────────────────────────────────────────────
 
