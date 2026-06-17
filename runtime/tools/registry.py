@@ -32,6 +32,9 @@ def _load_send_message():
     from tools.messaging import send_message
     return send_message
 
+def _load_google_calendar():
+    from tools.google_calendar import google_calendar_action
+    return google_calendar_action
 
 # ── registry ───────────────────────────────────────────────────────────────────
 
@@ -82,6 +85,49 @@ REGISTRY: dict[str, dict] = {
         "handler": _load_send_message,
         "enabled": True,
         "requires_env": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_USER_ID"],
+    },
+    "google_calendar": {
+        "description": (
+            "Interact with the user's primary Google Calendar. "
+            "Supports listing, free-text searching, creating, updating, and deleting events. "
+            "When updating or deleting, try using a specific 'event_id' if available from past turns, "
+            "otherwise use the 'query' text parameters to locate the subject event dynamically."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list_events", "search_events", "create_event", "delete_event", "update_event"],
+                    "description": "The target action to perform.",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "default": 10,
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Text query used to find matching events for search, deletion, or modifications.",
+                },
+                "event_id": {
+                    "type": "string",
+                    "description": "The exact alphanumeric target ID assigned by Google.",
+                },
+                "summary": {"type": "string", "description": "Title for a new event."},
+                "start_time": {"type": "string", "description": "ISO start time string."},
+                "end_time": {"type": "string", "description": "ISO end time string."},
+                "description": {"type": "string"},
+                "new_summary": {"type": "string", "description": "Used to overwrite titles in update_event."},
+                "new_description": {"type": "string", "description": "Used to overwrite details in update_event."},
+                "new_start_time": {"type": "string", "description": "Used to adjust timing in update_event."},
+                "new_end_time": {"type": "string", "description": "Used to adjust timing in update_event."}
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+        "handler": _load_google_calendar,
+        "enabled": True,
+        "requires_env": [],
     },
 
 }

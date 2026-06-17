@@ -12,8 +12,11 @@ data/profile.md
 
 archive/
 
+credentials.json
+token.json
 
 
+test_*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
