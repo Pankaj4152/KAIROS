@@ -143,23 +143,43 @@ REGISTRY: dict[str, dict] = {
     
     "check_gmail": {
         "description": (
-            "Scan the user's email inbox for unread messages. Use this tool whenever "
-            "the user asks you to look at their emails, check for alerts, triage new notifications, "
-            "or summarize their recent inbox messages."
+            "Read and manage the user's Gmail inbox via IMAP. "
+            "Actions: "
+            "'list_unread' — headers of recent unread emails (default); "
+            "'list_recent' — headers of recent emails regardless of read status; "
+            "'search' — search inbox by keyword (provide 'query'); "
+            "'get_body' — full readable body of one email (provide 'uid' from a previous list/search); "
+            "'mark_read' — mark one email as read (provide 'uid'); "
+            "'count_unread' — unread count only, fastest option. "
+            "UIDs appear in list/search output as 'UID: <value>' — copy the value to pass as 'uid'."
         ),
         "schema": {
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["list_unread"],
-                    "description": "The email extraction operation to execute.",
+                    "enum": ["list_unread", "list_recent", "search", "get_body", "mark_read", "count_unread"],
+                    "description": "The Gmail operation to perform.",
                 },
                 "max_results": {
                     "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
                     "default": 5,
-                    "description": "Max unread email headers to read and parse.",
-                }
+                    "description": "Max emails to return for list/search actions.",
+                },
+                "query": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Keyword to search for. Required when action='search'.",
+                },
+                "uid": {
+                    "type": "string",
+                    "description": (
+                        "Email UID from a previous list_unread, list_recent, or search result. "
+                        "Required when action='get_body' or action='mark_read'."
+                    ),
+                },
             },
             "required": ["action"],
             "additionalProperties": False,
