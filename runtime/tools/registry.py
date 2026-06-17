@@ -40,6 +40,9 @@ def _load_google_keep():
     from tools.google_keep import google_keep_action
     return google_keep_action
 
+def _load_check_gmail():
+    from tools.gmail_check import check_gmail
+    return check_gmail
 
 # ── registry ───────────────────────────────────────────────────────────────────
 
@@ -137,6 +140,36 @@ REGISTRY: dict[str, dict] = {
         "enabled": True,
         "requires_env": [],
     },
+    
+    "check_gmail": {
+        "description": (
+            "Scan the user's email inbox for unread messages. Use this tool whenever "
+            "the user asks you to look at their emails, check for alerts, triage new notifications, "
+            "or summarize their recent inbox messages."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list_unread"],
+                    "description": "The email extraction operation to execute.",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "default": 5,
+                    "description": "Max unread email headers to read and parse.",
+                }
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+        "handler": _load_check_gmail,
+        "enabled": True,
+        "requires_env": ["GMAIL_USER", "GMAIL_APP_PASSWORD"],
+    },
+    
+    
     # "google_keep": {
     #     "domain": "notes",
     #     "description": (
