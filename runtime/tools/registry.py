@@ -36,11 +36,17 @@ def _load_google_calendar():
     from tools.google_calendar import google_calendar_action
     return google_calendar_action
 
+def _load_google_keep():
+    from tools.google_keep import google_keep_action
+    return google_keep_action
+
+
 # ── registry ───────────────────────────────────────────────────────────────────
 
 REGISTRY: dict[str, dict] = {
 
     "web_search": {
+        "domain": "search",
         "description": (
             "Search the web for current information. Use when the user asks about "
             "recent events, facts you may not know, or anything requiring up-to-date data."
@@ -64,6 +70,7 @@ REGISTRY: dict[str, dict] = {
     },
 
     "send_message": {
+        "domain": "messaging",
         "description": (
             "Push a direct message to the user's Telegram. Use this whenever the user asks you to send them something "
             "on Telegram, OR to proactively alert them. Supports emojis and standard formatting. "
@@ -87,6 +94,7 @@ REGISTRY: dict[str, dict] = {
         "requires_env": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_USER_ID"],
     },
     "google_calendar": {
+        "domain": "calendar",
         "description": (
             "Interact with the user's primary Google Calendar. "
             "Supports listing, free-text searching, creating, updating, and deleting events. "
@@ -129,7 +137,41 @@ REGISTRY: dict[str, dict] = {
         "enabled": True,
         "requires_env": [],
     },
-
+    # "google_keep": {
+    #     "domain": "notes",
+    #     "description": (
+    #         "Interact with the user's personal Google Keep scratchpad account. "
+    #         "Use this tool for rapid text capture, keeping reminders, logging transient "
+    #         "brain dumps, creating lists, or appending thoughts to an existing note text block."
+    #     ),
+    #     "schema": {
+    #         "type": "object",
+    #         "properties": {
+    #             "action": {
+    #                 "type": "string",
+    #                 "enum": ["list_notes", "create_note", "append_to_note"],
+    #                 "description": "The scratchpad operation to execute.",
+    #             },
+    #             "max_results": {
+    #                 "type": "integer",
+    #                 "default": 5,
+    #             },
+    #             "title": {
+    #                 "type": "string",
+    #                 "description": "The title of the note (used for targeting or creation).",
+    #             },
+    #             "text": {
+    #                 "type": "string",
+    #                 "description": "The text string content to write or append inside the target note.",
+    #             }
+    #         },
+    #         "required": ["action"],
+    #         "additionalProperties": False,
+    #     },
+    #     "handler": _load_google_keep,
+    #     "enabled": True,
+    #     "requires_env": ["GOOGLE_USERNAME", "GOOGLE_APP_PASSWORD"],
+    # },
 }
 
 
