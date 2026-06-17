@@ -31,10 +31,9 @@ Browser-based chat at `http://localhost:8000`.
   <img src="images/home.png" alt="Kairos WebUI" width="600">
 </p>
 
-### Voice *(coming soon)*
-- Wake word → speak → hear the response
-- Full pipeline: VAD → STT (Deepgram) → LLM → TTS (Cartesia) → speaker
-- Designed for <500ms end-to-end on simple requests
+### Email Channel
+- **Proactive morning briefing** — daily HTML briefings containing your pending tasks and events are delivered directly to your email inbox.
+- **Verification diagnostics** — connection checks are run at application boot to ensure the SMTP endpoint is configured properly.
 
 ---
 
@@ -132,6 +131,34 @@ If you use Serper, set `SERPER_API_KEY` in `.env`. If `SEARCH_BACKEND` is unsupp
 
 ---
 
+### 📅 Google Calendar
+Synchronize and manage your primary Google Calendar directly through natural text commands.
+
+```
+"What do I have tomorrow?"
+"Add a meeting with the team at 3pm on Thursday"
+"Search for any dentist appointments on my calendar"
+"Change my meeting tomorrow to be at 4pm"
+"Delete my dental appointment next Tuesday"
+```
+
+Integrates directly with the Google Calendar API, letting you list, search, create, update, or delete entries dynamically.
+
+---
+
+### 📧 Gmail Inbox Check
+Read unread email headers directly from your inbox using secure IMAP protocols.
+
+```
+"Do I have any unread emails?"
+"Check my inbox alerts"
+"What are the subjects of my latest unread emails?"
+```
+
+Scans the last unread emails and outputs sender, subject line, and date details without downloading attachments or bloated bodies. Requires configuring `GMAIL_USER` and `GMAIL_APP_PASSWORD` in `.env`.
+
+---
+
 ### 🧠 Semantic Memory
 
 Kairos remembers past conversations via vector embeddings.
@@ -149,10 +176,11 @@ Every conversation turn is embedded and stored. When relevant, past turns are re
 
 ### ☀️ Morning Briefing
 
-Automated daily push notification via Telegram.
+Automated daily briefing sent directly to your email inbox.
 
 - Summarises your open tasks and upcoming events
 - Composed by the LLM — natural, concise, energetic
+- Delivered as a clean HTML email via Gmail SMTP
 - Configurable time: `BRIEFING_HOUR` and `BRIEFING_MINUTE` in `.env`
 - Timezone-aware (defaults to `Asia/Kolkata`)
 
@@ -184,7 +212,6 @@ Kairos maintains context within and across sessions.
 - Get reminded about meetings and deadlines
 - Quick web search during deep work (without leaving your editor)
 - Track spending on tools and infrastructure
-- Voice commands while coding (hands-free, coming soon)
 
 ### 🏋️ Health & Routine
 - Track gym sessions, diet, and meditation as habits

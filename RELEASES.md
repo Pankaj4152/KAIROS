@@ -1,5 +1,14 @@
 # Version History
 
+## v2.1.0 - Email SMTP Briefing & Integrated Tools (June 2026)
+
+- **Email Channel briefings**: Daily morning briefings are now sent proactively via secure HTML emails using Gmail SMTP transport (replacing Telegram alerts).
+- **Gmail IMAP Tool**: Added `check_gmail` tool for extracting unread inbox mail headers asynchronously.
+- **Google Calendar Tool**: Full list/search/create/update/delete support for Google Calendar.
+- **Latency Tester Benchmarks**: Upgraded `latency_probe.py` with multi-scenario benchmarks (`simple`, `reasoning`, `essay`, `system_design`, `coding`) and concurrent load options.
+- **Dynamic Registry & Classification**: Refined Classifier prompts and schemas to resolve valid tool and domain mappings dynamically.
+- **Voice dependencies cleanup**: Commented out voice pipeline libraries (`pyaudio`, `pipecat-ai`) from primary `requirements.txt` to avoid cross-platform compilation errors during initial base setups. Voice remains ongoing/under-development.
+
 ## v2.0.0 - Resilient Intelligence (April 2026)
 
 - Multi-tier automatic fallback (tier 3 -> tier 2 -> tier 1)

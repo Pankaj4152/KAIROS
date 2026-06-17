@@ -57,9 +57,9 @@ Orchestrator       classify request → pick tier → assemble context → strea
       ↓
 Memory             SQLite (tasks/events/habits/spending) · sqlite-vec (semantic) · session JSON
       ↓
-Tools              web search · calendar · messaging
+Tools              web search · calendar · messaging · email
       ↓
-Output             TTS → speaker · Telegram sendMessage · WebSocket → browser
+Output             TTS → speaker · Telegram sendMessage · WebSocket → browser · SMTP → email
 ```
 
 Every request becomes a `KairosEvent` before anything else touches it. The orchestrator never knows which channel sent the message — only the content and session.
@@ -155,7 +155,7 @@ The classifier runs on **every request** and outputs:
 | `tier` | Which model to use |
 
 **Valid domains:** `tasks`, `events`, `habits`, `spending`, `memory`  
-**Valid tools:** `web_search`, `calendar_write`, `send_message`
+**Valid tools:** `web_search`, `google_calendar`, `send_message`, `check_gmail`
 
 Unknown values from the model are silently dropped — never passed downstream.
 

@@ -10,7 +10,7 @@ Listens for a wake word at home, accepts text via Telegram when you're out, acce
 
 ## Highlights
 
-- **Voice-first at home** — wake word → speech → response via speaker
+- **Voice-first at home** — wake word → speech → response via speaker (Ongoing / Under development)
 - **Text-first outside** — Telegram bot, always on
 - **Browser UI** — works from any device on your LAN or via Tailscale
 - **Persistent memory** — tasks, events, habits, spending, conversation history
@@ -152,15 +152,15 @@ kairos/
 |-------|------------|
 | Language | Python 3.12 |
 | Async | asyncio throughout |
-| Voice pipeline | Pipecat, Deepgram, Cartesia, silero-vad, Porcupine |
+| Voice pipeline | Ongoing / Under development (experimental) |
 | LLM routing | LiteLLM proxy |
 | Local inference | Ollama (qwen2.5:3b-instruct, qwen2.5:7b-instruct) |
 | Cloud LLMs | Gemini (gemini-2.5-flash) |
-| Channels | python-telegram-bot, FastAPI + WebSocket |
+| Channels | python-telegram-bot, FastAPI + WebSocket, SMTP Email |
 | Database | SQLite + sqlite-vec |
 | Embeddings | text-embedding-3-small (OpenAI) or nomic-embed-text (Ollama) |
 | Scheduling | APScheduler |
-| Tools | Brave Search, Tavily, DuckDuckGo, Serper, Google Calendar |
+| Tools | Brave Search, Tavily, DuckDuckGo, Serper, Google Calendar, Gmail Check |
 | Remote access | Tailscale |
 | Containers | Docker Compose |
 
@@ -176,6 +176,8 @@ kairos/
 
 ---
 
+
+Different symbols - 🚨, ⚠️, 🛠️
 ## License
 
 This is a personal project. No license yet.
