@@ -107,13 +107,6 @@ class LLMClient:
         t0 = time.perf_counter()
 
         logger.debug("LLM stream start  model=%s tier=%d", model, tier)
-        trace(
-            "LLM.stream start model=%s tier=%d timeout=%.1f messages=%d",
-            model,
-            tier,
-            timeout,
-            len(messages),
-        )
 
         payload = {
             "model": model, 
@@ -164,26 +157,6 @@ class LLMClient:
             logger.error("LLM stream proxy network connection error: %s", e)
             raise LLMError(f"Could not reach LiteLLM router: {e}") from e
             
-        # except httpx.HTTPStatusError as e:
-        #     logger.warning(
-        #         "LLM.stream http_status_error model=%s tier=%d status=%d elapsed=%.2fs",
-        #         model,
-        #         tier,
-        #         e.response.status_code,
-        #         time.perf_counter() - t0,
-        #     )
-        #     logger.warning("LLM stream error  model=%s tier=%d HTTP %d duration=%.2fs", model, tier, e.response.status_code, time.perf_counter() - t0)
-        #     raise LLMError(
-        #         f"LiteLLM HTTP {e.response.status_code} on stream (tier={tier})"
-        #     ) from e
-        # except httpx.TimeoutException:
-        #     trace("LLM.stream timeout model=%s tier=%d timeout=%.1f", model, tier, timeout)
-        #     logger.warning("LLM stream timeout  model=%s tier=%d after %.2fs", model, tier, time.perf_counter() - t0)
-        #     raise LLMError(f"Stream timed out after {timeout}s (tier={tier})") from None
-        # except httpx.RequestError as e:
-        #     trace("LLM.stream request_error model=%s tier=%d error=%s", model, tier, e)
-        #     logger.warning("LLM stream unreachable  model=%s tier=%d error=%s", model, tier, e)
-        #     raise LLMError(f"Could not reach LiteLLM at {self.base_url}: {e}") from e
 
         
     async def complete(
@@ -199,9 +172,6 @@ class LLMClient:
         last_error: Exception | None = None
         t0 = time.perf_counter()
         
-        # logger.info("LLM complete start  model=%s tier=%d timeout=%.1fs retries=%d", 
-        #             model, tier, timeout, retries)
-        # trace("Messages for %s: %s", model, messages)
         
         for attempt in range(retries + 1):
             if attempt > 0:
@@ -220,7 +190,6 @@ class LLMClient:
                     "stream": False,
                     # "max_tokens": 2048,
                 }
-                # trace("POST to %s with payload keys: %s", url, list(request_payload.keys()))
                 
                 response = await self._client.post(
                     url,
@@ -228,7 +197,6 @@ class LLMClient:
                     timeout=timeout,
                 )
                 
-                # trace("Response status: %d", response.status_code)
                 
                 # CRITICAL FIX: Only immediately abort if it's a structural or credential bug
                 if response.status_code in (400, 401, 403):
@@ -240,16 +208,9 @@ class LLMClient:
                 # Let 429 (Rate Limits) or 5xx server issues pass through to the retry loop!
                 response.raise_for_status()
                 resp_json = response.json()
-                # trace("Response JSON keys: %s", list(resp_json.keys()))
                 
                 result = resp_json["choices"][0]["message"]["content"]
                 
-                # logger.info(
-                #     "LLM complete done   model=%s tier=%d duration=%.2fs chars=%d",
-                #     model, tier, time.perf_counter() - t0, len(result),
-                # )
-                # trace("Response text: %s...", result[:200])
-                # return result
                 logger.info("LLM complete done model=%s execution_time=%.2fs", model, time.perf_counter() - t0)
                 return result
                 
@@ -257,17 +218,12 @@ class LLMClient:
                 raise # Bubble up fatal bugs instantly
             except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as e:
                 last_error = e
-                # trace("Exception type: %s, message: %s", type(e).__name__, str(e)[:100])
                 logger.debug("Transient failure encountered during execution sequence: %s", e)
                 continue
             except (KeyError, IndexError) as e:
-                # raise LLMError(f"Unexpected LiteLLM response shape: {e}") from e
                 raise LLMError(f"Unexpected response payload shape from proxy endpoint: {e}") from e
         
-        # logger.error(
-        #     "LLM complete FAILED  model=%s tier=%d attempts=%d duration=%.2fs error=%s",
-        #     model, tier, retries + 1, time.perf_counter() - t0, last_error,
-        # )
+        
         raise LLMError(f"LiteLLM failed completely after {retries + 1} attempts. Last error: {last_error}")
 
     async def complete_with_tools(
@@ -305,19 +261,10 @@ class LLMClient:
         last_error: Exception | None = None
         t0 = time.perf_counter()
 
-        # logger.info("LLM tools start  model=%s tier=%d tool_count=%d", model, tier, len(tools))
-        # trace(
-        #     "LLM.tools start model=%s tier=%d timeout=%.1f retries=%d input_messages=%d",
-        #     model,
-        #     tier,
-        #     timeout,
-        #     retries,
-        #     len(messages),
-        # )
+
 
         # Convert internal Anthropic-style messages to OpenAI-compatible messages.
         openai_messages = self._to_openai_tool_messages(messages)
-        # trace("LLM.tools converted_messages=%d", len(openai_messages))
 
         # Convert tool schemas to OpenAI function format
         functions = [
@@ -339,14 +286,9 @@ class LLMClient:
         ]
 
         for attempt in range(retries + 1):
-            # trace("LLM.tools attempt=%d/%d model=%s", attempt + 1, retries + 1, model)
  
             if attempt > 0:
                 delay = RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                # logger.warning(
-                #     "LLM tools retry  model=%s attempt=%d/%d delay=%.1fs error=%s",
-                #     model, attempt + 1, retries + 1, delay, last_error,
-                # )
                 await asyncio.sleep(delay)
 
             try:
@@ -360,11 +302,9 @@ class LLMClient:
                     "tool_choice": "auto",
                     # "max_tokens": 2048,
                 }
-                # trace("LLM.tools post modern payload_keys=%s", list(request_payload.keys()))
                 response = await self._client.post(url, json=request_payload, timeout=timeout)
 
                 if response.status_code == 400 and "tools" in response.text:
-                    # trace("LLM.tools modern 400, trying legacy functions payload")
                     legacy_payload = {
                         "model": model,
                         "messages": openai_messages,
@@ -374,22 +314,7 @@ class LLMClient:
                         # "max_tokens": 2048,
                     }
                     response = await self._client.post(url, json=legacy_payload, timeout=timeout)
-                    # trace("LLM.tools legacy response_status=%d", response.status_code)
 
-                # if 400 <= response.status_code < 500:
-                #     detail = ""
-                #     try:
-                #         detail = response.text[:300]
-                #     except Exception:
-                #         detail = ""
-                #     trace(
-                #         "LLM.tools client_error status=%d detail_preview=%r",
-                #         response.status_code,
-                #         detail[:120],
-                #     )
-                #     raise LLMError(
-                #         f"LiteLLM HTTP {response.status_code} (tier={tier}) — check prompt/auth. {detail}"
-                #     )
                 if response.status_code in (400, 401, 403):
                     raise LLMError(f"Fatal Tool Route Client Error {response.status_code}: {response.text[:200]}")
 
@@ -399,15 +324,7 @@ class LLMClient:
                 result = self._convert_to_anthropic_format(
                     response.json()["choices"][0]["message"]
                 )
-                # trace(
-                #     "LLM.tools converted_result_blocks=%d elapsed=%.2fs",
-                #     len(result.get("content", [])),
-                #     time.perf_counter() - t0,
-                # )
-                # logger.info(
-                #     "LLM tools done   model=%s tier=%d duration=%.2fs blocks=%d",
-                #     model, tier, time.perf_counter() - t0, len(result.get("content", [])),
-                # )
+
                 logger.info("LLM tools completed model=%s execution_time=%.2fs", model, time.perf_counter() - t0)
                 return result
 
@@ -416,27 +333,11 @@ class LLMClient:
 
             except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError) as e:
                 last_error = e
-                # trace("LLM.tools transient_error type=%s message=%s", type(e).__name__, str(e)[:150])
                 continue
 
             except (KeyError, IndexError) as e:
-                # raise LLMError(f"Unexpected LiteLLM response shape: {e}") from e
                 raise LLMError(f"Unexpected response payload shape from tool endpoint: {e}") from e
 
-        # logger.error(
-        #     "LLM tools FAILED  model=%s tier=%d attempts=%d duration=%.2fs error=%s",
-        #     model, tier, retries + 1, time.perf_counter() - t0, last_error,
-        # )
-        # trace(
-        #     "LLM.tools failed model=%s tier=%d attempts=%d error=%s",
-        #     model,
-        #     tier,
-        #     retries + 1,
-        #     last_error,
-        # )
-        # raise LLMError(
-        #     f"LiteLLM failed after {retries + 1} attempts (tier={tier}): {last_error}"
-        # )
         raise LLMError(f"LiteLLM tool tracking route failed structural runs. Last error: {last_error}")
 
     async def aclose(self) -> None:
@@ -588,12 +489,6 @@ class LLMClient:
         Logs a warning and falls back to tier 2 if an unknown tier is given.
         """
         if tier not in self.tier_models:
-            # Unknown tier — don't crash, but don't silently use the wrong model
-            # import warnings
-            # warnings.warn(
-            #     f"Unknown tier={tier}, falling back to tier 2. Check your call site.",
-            #     stacklevel=3,
-            # )
             return self.tier_models[2]
         return self.tier_models[tier]
 
