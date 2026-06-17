@@ -28,8 +28,83 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+DEFAULT_PROMPT = """
+Classify the user's intent into:
+chat, reminder, calendar, note, search, task.
 
-DEFAULT_PROMPT = "Return ONLY this JSON: {\"ok\":true}"
+Return JSON only.
+"""
+
+BENCHMARK_PROMPTS = {
+    "simple": DEFAULT_PROMPT,
+
+    "reasoning": """
+Solve this problem step by step.
+
+A train leaves Delhi at 60 km/h.
+Another leaves Jaipur at 80 km/h.
+The cities are 280 km apart.
+
+Determine:
+1. When they meet.
+2. Distance traveled by each train.
+3. Verify the answer using a second method.
+
+Show all reasoning.
+""",
+
+    "essay": """
+Write a detailed essay comparing:
+
+- Transformer architectures
+- Mixture-of-Experts models
+- Retrieval-Augmented Generation
+
+Discuss:
+- strengths
+- weaknesses
+- cost tradeoffs
+- scalability
+- future research directions
+
+Target approximately 1500 words.
+""",
+
+    "system_design": """
+Design a distributed task scheduling platform capable of processing
+100 million jobs per day.
+
+Include:
+
+- Architecture diagram (text form)
+- API design
+- Database schema
+- Queueing strategy
+- Retry handling
+- Monitoring
+- Fault tolerance
+- Horizontal scaling strategy
+
+Provide implementation details and examples.
+""",
+
+    "coding": """
+Build a production-grade Python web crawler.
+
+Requirements:
+
+- asyncio
+- rate limiting
+- robots.txt compliance
+- retries with backoff
+- persistent queue
+- structured logging
+- unit tests
+- configuration management
+
+Provide complete code and explanations.
+""",
+}
 
 
 @dataclass
@@ -132,14 +207,27 @@ async def main() -> None:
     parser.add_argument("--runs", type=int, default=5)
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--timeout", type=float, default=float(os.getenv("LLM_COMPLETE_TIMEOUT", "60")))
-    parser.add_argument("--max-tokens", type=int, default=64)
+    parser.add_argument("--max-tokens", type=int, default=2048)    
     parser.add_argument("--prompt", default=DEFAULT_PROMPT)
     parser.add_argument("--tiers", nargs="*", type=int, default=[1, 2, 3])
     parser.add_argument("--models", nargs="*", help="Model aliases accepted by LiteLLM, e.g. tier1 tier2 tier3")
+    parser.add_argument(
+        "--benchmark",
+        choices=list(BENCHMARK_PROMPTS.keys()),
+        default="simple",
+    )
+
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=1,
+    )
+
     args = parser.parse_args()
 
     models = args.models if args.models else [f"tier{t}" for t in args.tiers]
 
+    prompt = BENCHMARK_PROMPTS[args.benchmark]
     print(f"LiteLLM base URL: {args.base_url}")
     print(f"Models: {', '.join(models)}")
     print(f"Runs/model={args.runs}, warmup={args.warmup}, timeout={args.timeout}s")
@@ -153,7 +241,7 @@ async def main() -> None:
                 runs=args.runs,
                 warmup=args.warmup,
                 timeout_s=args.timeout,
-                prompt=args.prompt,
+                prompt=prompt,
                 max_tokens=args.max_tokens,
             )
             print(summarize(model, results))
