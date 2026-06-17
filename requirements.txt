@@ -10,7 +10,19 @@ sqlite-vec
 duckduckgo-search
 jsonschema
 pytest
+apscheduler
 
+
+# Google Calendar
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
+
+
+gkeepapi
+
+# Voice recognition and wake word detection
+# pipecat-ai[silero,deepgram,cartesia,local]
+# pipwin
+# pyaudio
+# pvporcupine
