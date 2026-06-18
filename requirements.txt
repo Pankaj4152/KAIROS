@@ -20,7 +20,7 @@ google-auth-oauthlib
 
 
 gkeepapi
-
+langfuse
 # Voice recognition and wake word detection
 # pipecat-ai[silero,deepgram,cartesia,local]
 # pipwin

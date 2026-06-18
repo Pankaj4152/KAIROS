@@ -38,14 +38,14 @@ model_list:
       api_key: os.environ/GEMINI_API_KEY_2
       rpm: 15
 
-  - model_name: gemini/text-embedding-004
+  - model_name: embedding-model
     litellm_params:
-      model: gemini/text-embedding-004
+      model: gemini/gemini-embedding-001
       api_key: os.environ/GEMINI_API_KEY
   
-  - model_name: gemini/text-embedding-004
+  - model_name: embedding-model
     litellm_params:
-      model: gemini/text-embedding-004
+      model: gemini/gemini-embedding-001
       api_key: os.environ/GEMINI_API_KEY_2
 
 general_settings:

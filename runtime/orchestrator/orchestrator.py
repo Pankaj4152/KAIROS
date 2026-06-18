@@ -139,7 +139,7 @@ class Orchestrator:
 
     async def _fetch_tasks_block(self) -> str | None:
         try:
-            tasks = await fetch_open_tasks()
+            tasks = await asyncio.to_thread(fetch_open_tasks)
             if not tasks:
                 return None
             lines = "\n".join(
@@ -154,7 +154,7 @@ class Orchestrator:
 
     async def _fetch_events_block(self) -> str | None:
         try:
-            events = await fetch_upcoming_events(limit=3)
+            events = await asyncio.to_thread(fetch_upcoming_events, limit=3)
             if not events:
                 return None
             lines = "\n".join(
@@ -168,7 +168,7 @@ class Orchestrator:
 
     async def _fetch_habits_block(self) -> str | None:
         try:
-            habits = await fetch_habits()
+            habits = await asyncio.to_thread(fetch_habits)
             if not habits:
                 return None
             lines = "\n".join(
@@ -183,7 +183,7 @@ class Orchestrator:
 
     async def _fetch_spending_block(self) -> str | None:
         try:
-            rows = await fetch_spending_summary()
+            rows = await asyncio.to_thread(fetch_spending_summary)
             if not rows:
                 return None
             lines = "\n".join(
