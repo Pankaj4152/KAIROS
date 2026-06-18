@@ -96,49 +96,106 @@ REGISTRY: dict[str, dict] = {
         "enabled": True,
         "requires_env": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_USER_ID"],
     },
+    
     "google_calendar": {
         "domain": "calendar",
         "description": (
-            "Interact with the user's primary Google Calendar. "
-            "Supports listing, free-text searching, creating, updating, and deleting events. "
-            "When updating or deleting, try using a specific 'event_id' if available from past turns, "
-            "otherwise use the 'query' text parameters to locate the subject event dynamically."
+            "Interact with the user's Google Calendar. "
+            "Actions: "
+            "'list_events' — upcoming events with times, locations, and IDs; "
+            "'get_event' — full details of one event including notes, attendees, and Meet link (requires 'event_id'); "
+            "'search_events' — free-text search across all events past and future (requires 'query'); "
+            "'create_event' — create a new event, returns the new event ID (requires summary, start_time, end_time); "
+            "'update_event' — patch specific fields without touching others (requires event_id or query, plus new_* fields); "
+            "'delete_event' — delete by event_id, or search by query (shows matches if ambiguous); "
+            "'list_calendars' — list all calendars and their IDs. "
+            "Event IDs appear in list_events and search_events output as 'ID: <value>' — use these for get/update/delete. "
+            "Datetimes use ISO 8601 format: '2026-06-20T15:00:00' (no offset needed — timezone from user settings)."
         ),
         "schema": {
             "type": "object",
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["list_events", "search_events", "create_event", "delete_event", "update_event"],
-                    "description": "The target action to perform.",
+                    "enum": [
+                        "list_events", "get_event", "search_events",
+                        "create_event", "update_event", "delete_event",
+                        "list_calendars",
+                    ],
+                    "description": "Which calendar operation to perform.",
                 },
                 "max_results": {
                     "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
                     "default": 10,
+                    "description": "Max events to return for list_events and search_events.",
                 },
                 "query": {
                     "type": "string",
-                    "description": "Text query used to find matching events for search, deletion, or modifications.",
+                    "maxLength": 300,
+                    "description": "Free-text search string. Required for search_events. Optional for update_event and delete_event when event_id is unknown.",
                 },
                 "event_id": {
                     "type": "string",
-                    "description": "The exact alphanumeric target ID assigned by Google.",
+                    "description": "Google Calendar event ID from a prior list_events or search_events result. Required for get_event. Preferred over 'query' for update_event and delete_event.",
                 },
-                "summary": {"type": "string", "description": "Title for a new event."},
-                "start_time": {"type": "string", "description": "ISO start time string."},
-                "end_time": {"type": "string", "description": "ISO end time string."},
-                "description": {"type": "string"},
-                "new_summary": {"type": "string", "description": "Used to overwrite titles in update_event."},
-                "new_description": {"type": "string", "description": "Used to overwrite details in update_event."},
-                "new_start_time": {"type": "string", "description": "Used to adjust timing in update_event."},
-                "new_end_time": {"type": "string", "description": "Used to adjust timing in update_event."}
+                "calendar_id": {
+                    "type": "string",
+                    "description": "Calendar to operate on. Defaults to the primary calendar. Get IDs from list_calendars.",
+                },
+                "summary": {
+                    "type": "string",
+                    "description": "Event title. Required for create_event.",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Event body / notes. Optional for create_event.",
+                },
+                "location": {
+                    "type": "string",
+                    "description": "Location string. Optional for create_event.",
+                },
+                "start_time": {
+                    "type": "string",
+                    "description": "ISO 8601 start datetime. Required for create_event. Example: '2026-06-20T15:00:00'.",
+                },
+                "end_time": {
+                    "type": "string",
+                    "description": "ISO 8601 end datetime. Required for create_event.",
+                },
+                "attendee_emails": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Email addresses to invite. Optional for create_event. Invite emails are sent automatically.",
+                },
+                "new_summary": {
+                    "type": "string",
+                    "description": "Replacement title for update_event.",
+                },
+                "new_description": {
+                    "type": "string",
+                    "description": "Replacement description for update_event.",
+                },
+                "new_start_time": {
+                    "type": "string",
+                    "description": "Replacement start datetime for update_event.",
+                },
+                "new_end_time": {
+                    "type": "string",
+                    "description": "Replacement end datetime for update_event.",
+                },
+                "new_location": {
+                    "type": "string",
+                    "description": "Replacement location for update_event.",
+                },
             },
             "required": ["action"],
             "additionalProperties": False,
         },
         "handler": _load_google_calendar,
         "enabled": True,
-        "requires_env": [],
+        "requires_env": [],   # auth via token.json / credentials.json, not env vars
     },
     
     "check_gmail": {
