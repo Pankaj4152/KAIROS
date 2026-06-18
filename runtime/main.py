@@ -26,6 +26,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 
+from utils.storage import storage_manager
+
+
 # Ensure local imports work cleanly
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))  # Add project root for config module
@@ -137,6 +140,13 @@ async def main() -> None:
     from channels.webui import WebUIChannel
 
     logger.info("Kairos starting...")
+
+    # 1. Pull down base core files first
+    critical_files = ["kairos.db", "preferences.json", "profile.md"]
+    await storage_manager.sync_down(critical_files)
+    # 2. Pull down past session json history files
+    await storage_manager.sync_down_sessions()
+
 
     # 1. Structured store — tasks, events, habits, spending, schema_version
     init_db()

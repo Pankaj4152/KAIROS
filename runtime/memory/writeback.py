@@ -27,6 +27,8 @@ from llm.client import LLMClient
 from memory.session_store import append_turn, needs_compaction, compact, get_history
 from memory.vector_store import embed_and_store
 
+from runtime.utils.storage import storage_manager
+
 logger = logging.getLogger(__name__)
 
 
@@ -199,7 +201,8 @@ async def _save_facts(facts: list[dict], data_dir: str) -> None:
 
     prefs_path = os.path.join(data_dir, "preferences.json")
 
-    def _run():
+    # Keep only synchronous, blocking file-system logic inside the thread worker
+    def _run_io():
         # Load existing prefs
         try:
             with open(prefs_path, "r", encoding="utf-8") as f:
@@ -216,10 +219,13 @@ async def _save_facts(facts: list[dict], data_dir: str) -> None:
 
         with open(prefs_path, "w", encoding="utf-8") as f:
             json.dump(prefs, f, indent=2, ensure_ascii=False)
-
-        logger.debug("Saved %d facts to preferences.json", len(facts))
-
-    await asyncio.to_thread(_run)
+    
+    # 1. Safely run disk updates on a worker thread
+    await asyncio.to_thread(_run_io)
+    logger.debug("Saved local records to preferences.json")
+    # 2. Call your bucket sync up out here since _save_facts IS an async def!
+    await storage_manager.sync_up_background("preferences.json")
+    logger.debug("Asynchronously uploaded preferences.json update back up to R2.")
 
 # Intents that carry no useful information for memory.
 # Session history is still preserved (conversation flow matters),
@@ -311,3 +317,13 @@ async def run_writeback(
         await _save_facts(facts, _data_dir)
 
     logger.debug("Writeback complete for session %s", session_id[:8])
+
+
+    # Trigger the automated push using your relative local directory structure
+    from runtime.utils.storage import storage_manager
+    
+    # This pushes 'data/sessions/session_id.json' as 'sessions/session_id.json' to R2
+    session_relative_key = f"sessions/{session_id}.json"
+    await storage_manager.sync_up_background(session_relative_key)
+    
+    logger.debug("Writeback processing complete and synced to R2 bucket backup.")
