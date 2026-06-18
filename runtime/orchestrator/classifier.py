@@ -212,7 +212,7 @@ class Classifier:
 
         return final
 
-    async def classify(self, text: str) -> dict:
+    async def classify(self, text: str, trace_id: str | None = None) -> dict:
         """
         Classify a user message. Always returns a valid routing dict.
 
@@ -246,6 +246,7 @@ class Classifier:
                 messages=[{"role": "user", "content": prompt}],
                 tier=1,
                 timeout=CLASSIFIER_TIMEOUT,
+                trace_id=trace_id,
             )
             result = self._parse(raw)
             logger.info(

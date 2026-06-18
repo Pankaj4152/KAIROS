@@ -74,9 +74,7 @@ FALLBACK_MESSAGE = "I'm having difficulty responding right now. Please try again
 # Initialize Langfuse client
 langfuse_client = Langfuse()
 
-# Instruct LiteLLM to auto-log all completion/stream events to Langfuse
-litellm.success_callback = ["langfuse"]
-litellm.failure_callback = ["langfuse"]
+
 
 class Orchestrator:
     """
@@ -437,7 +435,7 @@ class Orchestrator:
                         tools=agentic_schemas,
                         tier=attempt_tier,
                         timeout=response_timeout,
-                        metadata={"trace_id": trace_id} # Explicit link
+                        metadata={"langfuse_trace_id": trace_id} # Explicit link
                     )
                     
                     current_tier = attempt_tier  # Remember successful tier
@@ -479,7 +477,7 @@ class Orchestrator:
                     round_num + 1,
                 )
                 async for token in self._stream_with_tier_fallback(
-                    current_messages, current_tier, timeout=response_timeout
+                    current_messages, current_tier, timeout=response_timeout, trace_id=trace_id
                 ):
                     yield token
                 return
@@ -565,7 +563,7 @@ class Orchestrator:
             
             try:
                 async for token in self._stream_with_tier_fallback(
-                    current_messages, current_tier, timeout=response_timeout
+                    current_messages, current_tier, timeout=response_timeout, trace_id=trace_id
                 ):
                     yield token
             except Exception as e:
@@ -622,9 +620,9 @@ Guidelines:
         )
 
         context_span.update(metadata={
-            "context_chars": str(len(context)),
-            "pretools_chars": str(len(tool_results)),
-            "history_turns": str(len(history))
+            "context_chars": len(context),
+            "pretools_chars": len(tool_results),
+            "history_turns": len(history)
         })
         context_span.end()
 
@@ -688,13 +686,13 @@ Guidelines:
                 
                 # Nest observations manually by calling start_observation on the parent object
                 classifier_span = lf_trace.start_observation(
-                    as_type="span", 
+                    as_type="chain", 
                     name="classifier", 
                     input=event.text
                 )
                 
                 logger.debug("Step 1: Starting classification...")
-                classification = await self.classifier.classify(event.text)
+                classification = await self.classifier.classify(event.text, trace_id=lf_trace.trace_id)
                 tier         = classification.get("tier", 2)
                 domains      = classification.get("domains", [])
                 tools_needed = classification.get("tools_needed", [])
@@ -753,6 +751,7 @@ Guidelines:
                         intent=intent,
                         llm=self.llm,
                         data_dir=self.data_dir,
+                        trace_id=lf_trace.trace_id,
                     )
                 )
                 trace("Orchestrator.process writeback_scheduled session=%s", sid)

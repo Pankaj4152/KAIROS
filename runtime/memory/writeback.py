@@ -81,6 +81,7 @@ async def _append_session(
     channel: str,
     tier: int,
     llm: LLMClient,
+    trace_id: str | None = None,
 ) -> None:
     try:
         await append_turn(session_id, "user", user_text,
@@ -90,13 +91,13 @@ async def _append_session(
 
         if await needs_compaction(session_id):
             logger.info("Session %s needs compaction", session_id[:8])
-            await _compact_session(session_id, llm)
+            await _compact_session(session_id, llm, trace_id=trace_id)
 
     except Exception as e:
         logger.warning("append_session failed for %s: %s", session_id[:8], e)
 
 
-async def _compact_session(session_id: str, llm: LLMClient) -> None:
+async def _compact_session(session_id: str, llm: LLMClient, trace_id: str | None = None) -> None:
     try:
         history = await get_history(session_id, last_n=20)
         if not history:
@@ -113,6 +114,7 @@ async def _compact_session(session_id: str, llm: LLMClient) -> None:
             [{"role": "user", "content": prompt}],
             tier=1,
             timeout=15.0,
+            trace_id=trace_id,
         )
         await compact(session_id, summary)
         logger.info("Session %s compacted", session_id[:8])
@@ -124,6 +126,7 @@ async def _extract_facts(
     user_text: str,
     response_text: str,
     llm: LLMClient,
+    trace_id: str | None = None,
 ) -> list[dict]:
     """
     Use tier-1 LLM to extract structured facts from the conversation turn.
@@ -143,6 +146,7 @@ async def _extract_facts(
             [{"role": "user", "content": prompt}],
             tier=1,
             timeout=10.0,
+            trace_id=trace_id,
         )
 
         # Parse defensively — tier-1 models are inconsistent
@@ -234,6 +238,7 @@ async def run_writeback(
     intent: str = "question",
     llm: LLMClient | None = None,
     data_dir: str | None = None,
+    trace_id: str | None = None,
 ) -> None:
     """
     Run write-back jobs after a completed response.
@@ -254,6 +259,7 @@ async def run_writeback(
         llm:           LLM client for compaction + fact extraction.
                        Defaults to a new LLMClient() if not provided.
         data_dir:      where preferences.json lives. Defaults to DATA_DIR env var.
+        trace_id:      trace ID to propagate trace parenting in background jobs.
     """
     import os
     _llm      = llm or LLMClient()
@@ -267,7 +273,7 @@ async def run_writeback(
     )
 
     # Session append always runs — preserves conversation flow
-    session_task = _append_session(session_id, user_text, response_text, channel, tier, _llm)
+    session_task = _append_session(session_id, user_text, response_text, channel, tier, _llm, trace_id=trace_id)
 
     if skip_memory:
         # Chitchat — only save session history, skip embedding + facts
@@ -280,7 +286,7 @@ async def run_writeback(
 
     # Full writeback — embed + session + facts in parallel
     embed_task = _embed_turn(session_id, user_text, response_text)
-    facts_task = _extract_facts(user_text, response_text, _llm)
+    facts_task = _extract_facts(user_text, response_text, _llm, trace_id=trace_id)
 
     embed_result, _, facts = await asyncio.gather(
         embed_task,

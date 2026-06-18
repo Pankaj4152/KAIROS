@@ -118,7 +118,7 @@ class LLMClient:
 
         # 3. Inject metadata if a trace_id is supplied
         if trace_id:
-            payload["metadata"] = {"trace_id": trace_id}
+            payload["metadata"] = {"langfuse_trace_id": trace_id}
 
         try:
             # Using context manager approach ensures clean connection closing on stream interruptions
@@ -171,6 +171,7 @@ class LLMClient:
         tier: int = 1,
         timeout: float = COMPLETE_TIMEOUT,
         retries: int = MAX_RETRIES,
+        trace_id: str | None = None,
     ) -> str:
         """Return the full response as a single string."""
         model = self._resolve_model(tier)
@@ -196,6 +197,9 @@ class LLMClient:
                     "stream": False,
                     # "max_tokens": 2048,
                 }
+                
+                if trace_id:
+                    request_payload["metadata"] = {"langfuse_trace_id": trace_id}
                 
                 response = await self._client.post(
                     url,
