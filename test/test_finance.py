@@ -176,7 +176,7 @@ async def test_finance_resolution_failure():
 
         res = await finance("UnknownCompany")
 
-        assert "[FINANCE ERROR: Could not resolve financial symbol or asset for 'UnknownCompany']" in res
+        assert "[FINANCE ERROR: Could not resolve financial asset for 'UnknownCompany']" in res
 
 @pytest.mark.anyio
 async def test_finance_api_exception():

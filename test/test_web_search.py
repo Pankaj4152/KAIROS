@@ -90,10 +90,10 @@ class TestCircuitBreaker:
 
     def test_resets_after_time(self):
         import time
-        cb = CircuitBreaker(threshold=1, reset_sec=0.01)
+        cb = CircuitBreaker(threshold=1, reset_sec=0.5)
         cb.record_failure()
         assert cb.is_open()
-        time.sleep(0.02)
+        time.sleep(0.6)
         assert not cb.is_open()  # should auto-reset
 
     def test_success_clears_failures(self):

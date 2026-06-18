@@ -68,11 +68,11 @@ class TestParse:
     def test_unknown_domains_dropped(self):
         from orchestrator.classifier import Classifier
         c = Classifier.__new__(Classifier)
-        raw = '{"intent":"question","complexity":1,"domains":["tasks","weather","unknown"],"tools_needed":[],"tier":1}'
+        raw = '{"intent":"question","complexity":1,"domains":["tasks","unreal","unknown"],"tools_needed":[],"tier":1}'
         result = c._parse(raw)
         logger.info("Domains after filtering: %s", result["domains"])
         assert result["domains"] == ["tasks"]
-        assert "weather" not in result["domains"]
+        assert "unreal" not in result["domains"]
 
     def test_unknown_tools_dropped(self):
         from orchestrator.classifier import Classifier
