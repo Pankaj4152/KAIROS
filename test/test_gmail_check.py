@@ -37,7 +37,7 @@ from unittest.mock import MagicMock, patch, PropertyMock
 # Adjust if your project layout differs
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "runtime"))
 
-from runtime.tools.gmail_check import (
+from tools.gmail_check import (
     check_gmail,
     _decode_header_value,
     _strip_html,
@@ -49,7 +49,7 @@ from runtime.tools.gmail_check import (
 
 def run(coro):
     """Run an async coroutine in tests without pytest-asyncio."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 def _make_simple_email(

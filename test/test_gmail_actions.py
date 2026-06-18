@@ -47,7 +47,7 @@ from unittest.mock import MagicMock, patch, call
 # ── path setup ────────────────────────────────────────────────────────────────
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "runtime"))
 
-from runtime.tools.gmail_actions import (
+from tools.gmail_actions import (
     gmail_actions,
     _validate_address,
     _parse_address_list,
@@ -59,7 +59,7 @@ from runtime.tools.gmail_actions import (
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 ENV_CREDS = {"GMAIL_USER": "me@gmail.com", "GMAIL_APP_PASSWORD": "testpass1234"}
