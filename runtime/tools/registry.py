@@ -51,8 +51,11 @@ REGISTRY: dict[str, dict] = {
     "web_search": {
         "domain": "search",
         "description": (
-            "Search the web for current information. Use when the user asks about "
-            "recent events, facts you may not know, or anything requiring up-to-date data."
+            "Search the web for current information. "
+            "Use when the user asks about recent events, news, facts that may have changed, "
+            "or anything requiring up-to-date data. "
+            "Input: a concise search query string (max 200 chars). "
+            "Output: a list of sourced snippets — cite them, do not paraphrase freely."
         ),
         "schema": {
             "type": "object",
@@ -61,15 +64,23 @@ REGISTRY: dict[str, dict] = {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 200,
-                    "description": "The search query string",
-                }
+                    "description": "Concise search query. Be specific — avoid vague queries like 'tell me about X'.",
+                },
+                "max_results": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10,
+                    "default": 5,
+                    "description": "Number of results to return (default 5).",
+                },
             },
             "required": ["query"],
             "additionalProperties": False,
         },
-        "handler": _load_web_search,   # callable that returns the actual handler
-        "enabled": True,
-        "requires_env": [],            # duckduckgo default needs no key
+        "handler":      _load_web_search,   # factory — called once per process
+        "enabled":      True,
+        "requires_env": [],                 # duckduckgo default needs no key
+        "timeout_sec":  15.0,
     },
 
     "send_message": {
