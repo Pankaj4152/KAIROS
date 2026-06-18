@@ -143,7 +143,7 @@ class TestClassify:
     def test_classify_uses_tier1(self):
         """Classifier must use tier 1 (local phi) — never tier 2 for classification."""
         c = _make_classifier('{"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}')
-        run(c.classify("hello"))
+        run(c.classify("how to build a website"))
         _, kwargs = c.llm.complete.call_args
         assert kwargs.get("tier") == 1, f"Classifier should use tier=1, got tier={kwargs.get('tier')}"
 
