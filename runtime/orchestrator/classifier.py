@@ -212,7 +212,7 @@ class Classifier:
 
         return final
 
-    async def classify(self, text: str, trace_id: str | None = None) -> dict:
+    async def classify(self, text: str, trace_id: str | None = None, metadata: dict | None = None) -> dict:
         """
         Classify a user message. Always returns a valid routing dict.
 
@@ -242,12 +242,16 @@ class Classifier:
 
         try:
             # Set a timeout for the classifier call from centralized settings.
-            raw = await self.llm.complete(
-                messages=[{"role": "user", "content": prompt}],
-                tier=1,
-                timeout=CLASSIFIER_TIMEOUT,
-                trace_id=trace_id,
-            )
+            complete_kwargs = {
+                "messages": [{"role": "user", "content": prompt}],
+                "tier": 1,
+                "timeout": CLASSIFIER_TIMEOUT,
+                "trace_id": trace_id,
+            }
+            if metadata is not None:
+                complete_kwargs["metadata"] = metadata
+
+            raw = await self.llm.complete(**complete_kwargs)
             result = self._parse(raw)
             logger.info(
                 "Classified %r → %s (%.2fs)",

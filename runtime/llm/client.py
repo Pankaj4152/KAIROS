@@ -98,6 +98,7 @@ class LLMClient:
         tier: int = 2,
         timeout: float = STREAM_TIMEOUT,
         trace_id: str | None = None,  # 1. Accept the trace_id here
+        metadata: dict | None = None, # Telemetry metadata dictionary
     ) -> AsyncGenerator[str, None]:
         """
         Stream a response token by token.
@@ -114,10 +115,13 @@ class LLMClient:
             "model": model, 
             "messages": messages, 
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
 
-        # 3. Inject metadata if a trace_id is supplied
-        if trace_id:
+        # 3. Inject metadata if supplied, falling back to trace_id mapping
+        if metadata:
+            payload["metadata"] = metadata
+        elif trace_id:
             payload["metadata"] = {"langfuse_trace_id": trace_id}
 
         try:
@@ -172,6 +176,7 @@ class LLMClient:
         timeout: float = COMPLETE_TIMEOUT,
         retries: int = MAX_RETRIES,
         trace_id: str | None = None,
+        metadata: dict | None = None,
     ) -> str:
         """Return the full response as a single string."""
         model = self._resolve_model(tier)
@@ -198,7 +203,9 @@ class LLMClient:
                     # "max_tokens": 2048,
                 }
                 
-                if trace_id:
+                if metadata:
+                    request_payload["metadata"] = metadata
+                elif trace_id:
                     request_payload["metadata"] = {"langfuse_trace_id": trace_id}
                 
                 response = await self._client.post(
@@ -504,6 +511,8 @@ class LLMClient:
         Logs a warning and falls back to tier 2 if an unknown tier is given.
         """
         if tier not in self.tier_models:
+            import warnings
+            warnings.warn(f"Unknown tier {tier}, falling back to tier 2", UserWarning)
             return self.tier_models[2]
         return self.tier_models[tier]
 

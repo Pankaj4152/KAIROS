@@ -244,6 +244,7 @@ class Orchestrator:
         tier: int,
         trace_id: str, # Accept trace_id
         timeout: float = None,
+        metadata: dict | None = None,
     ) -> AsyncGenerator[str, None]:
         """
         Stream response with automatic tier fallback.
@@ -287,10 +288,16 @@ class Orchestrator:
                 t0 = time.perf_counter()
                 token_count = 0
                 
-                async for token in self.llm.stream(
-                    messages, tier=attempt_tier, timeout=timeout,
-                    trace_id=trace_id # Explicit link
-                ):
+                stream_kwargs = {
+                    "messages": messages,
+                    "tier": attempt_tier,
+                    "timeout": timeout,
+                    "trace_id": trace_id,
+                }
+                if metadata is not None:
+                    stream_kwargs["metadata"] = metadata
+
+                async for token in self.llm.stream(**stream_kwargs):
                     yield token
                     token_count += 1
                 
@@ -369,6 +376,7 @@ class Orchestrator:
         tier: int,
         tools_needed: list[str],
         trace_id: str, # Accept trace_id from parent
+        metadata: dict | None = None,
     ) -> AsyncGenerator[str, None]:
         """
         Agentic tool-use loop with tier fallback and graceful degradation.
@@ -407,8 +415,9 @@ class Orchestrator:
         if not agentic_schemas:
             logger.debug("No agentic tools, streaming directly")
             trace("Orchestrator.tool_loop no_agentic_tools streaming_direct")
+            direct_metadata = {**metadata, "generation_name": "direct_stream_response"} if metadata else {"langfuse_trace_id": trace_id, "generation_name": "direct_stream_response"}
             async for token in self._stream_with_tier_fallback(
-                messages, tier, timeout=response_timeout, trace_id=trace_id
+                messages, tier, timeout=response_timeout, trace_id=trace_id, metadata=direct_metadata
             ):
                 yield token
             return
@@ -430,12 +439,13 @@ class Orchestrator:
                         round_num + 1, attempt_tier,
                     )
                     
+                    tool_metadata = {**metadata, "generation_name": f"tool_round_{round_num}"} if metadata else {"langfuse_trace_id": trace_id, "generation_name": f"tool_round_{round_num}"}
                     response = await self.llm.complete_with_tools(
                         messages=current_messages,
                         tools=agentic_schemas,
                         tier=attempt_tier,
                         timeout=response_timeout,
-                        metadata={"langfuse_trace_id": trace_id} # Explicit link
+                        metadata=tool_metadata
                     )
                     
                     current_tier = attempt_tier  # Remember successful tier
@@ -476,8 +486,9 @@ class Orchestrator:
                     "Tool calling failed at all tiers in round %d, degrading to plain generation",
                     round_num + 1,
                 )
+                degraded_metadata = {**metadata, "generation_name": "fallback_degraded_stream"} if metadata else {"langfuse_trace_id": trace_id, "generation_name": "fallback_degraded_stream"}
                 async for token in self._stream_with_tier_fallback(
-                    current_messages, current_tier, timeout=response_timeout, trace_id=trace_id
+                    current_messages, current_tier, timeout=response_timeout, trace_id=trace_id, metadata=degraded_metadata
                 ):
                     yield token
                 return
@@ -562,8 +573,9 @@ class Orchestrator:
             )
             
             try:
+                max_rounds_metadata = {**metadata, "generation_name": "fallback_max_rounds_stream"} if metadata else {"langfuse_trace_id": trace_id, "generation_name": "fallback_max_rounds_stream"}
                 async for token in self._stream_with_tier_fallback(
-                    current_messages, current_tier, timeout=response_timeout, trace_id=trace_id
+                    current_messages, current_tier, timeout=response_timeout, trace_id=trace_id, metadata=max_rounds_metadata
                 ):
                     yield token
             except Exception as e:
@@ -575,16 +587,18 @@ class Orchestrator:
 
     def _build_system_prompt(self, context: str) -> str:
         profile = self._profile or "You are Kairos, a personal AI assistant."
+        current_time = _get_current_time_str()
 
         base = f"""You are Kairos, a personal AI assistant.
+                    Current Time: {current_time}
 
-{profile}
+                    {profile}
 
-Guidelines:
-- Be concise. The user may be listening via voice.
-- Never start with filler like "Great!" or "Of course!".
-- Respond in plain text ONLY. ABSOLUTELY NO markdown headers (#), bold (**), or bullet symbols (-/+) unless explicitly asked for formatting.
-- If you don't know something, say so directly. (You are a helpful assistant, but value brevity above all else.)"""
+                    Guidelines:
+                    - Be concise. The user may be listening via voice.
+                    - Never start with filler like "Great!" or "Of course!".
+                    - Respond in plain text ONLY. ABSOLUTELY NO markdown headers (#), bold (**), or bullet symbols (-/+) unless explicitly asked for formatting.
+                    - If you don't know something, say so directly. (You are a helpful assistant, but value brevity above all else.)"""
 
         if context:
             return f"{base}\n\n--- Current context ---\n{context}"
@@ -664,9 +678,16 @@ Guidelines:
         """
         t0 = time.perf_counter()
         sid = event.session_id[:8]
-
-        with propagate_attributes(session_id=event.session_id):
-            # 1. Start a global root span (which serves as the trace)
+    
+        with propagate_attributes(
+            session_id=event.session_id,
+            user_id=event.user_id if hasattr(event, "user_id") else "kairos-user",
+            metadata={
+                "channel": event.channel,
+                "environment": os.getenv("LANGFUSE_ENV", "default")
+            }
+        ):
+            # 1. Start a global root span (which serves as the parent span for observations)
             # Using manual observation management since this method is an AsyncGenerator
             lf_trace = langfuse_client.start_observation(
                 as_type="span",
@@ -677,6 +698,15 @@ Guidelines:
                     "text_len": str(len(event.text))  # Ensure primitive attributes are string-coerced in v4
                 }
             )
+            
+            # Extract structural tracing IDs so LiteLLM can link back to this parent span
+            trace_metadata = {
+                "trace_id": lf_trace.trace_id,       # The actual parent trace ID
+                "parent_observation_id": lf_trace.id, # The parent span ID
+                "session_id": event.session_id,      # Populates multi-turn session stats
+                "trace_user_id": event.user_id if hasattr(event, "user_id") else "kairos-user",
+                "environment": os.getenv("LANGFUSE_ENV", "default")
+            }
             
             try:
                 await self.startup()
@@ -692,7 +722,7 @@ Guidelines:
                 )
                 
                 logger.debug("Step 1: Starting classification...")
-                classification = await self.classifier.classify(event.text, trace_id=lf_trace.trace_id)
+                classification = await self.classifier.classify(event.text, trace_id=lf_trace.trace_id, metadata={**trace_metadata, "generation_name": "classifier"})
                 tier         = classification.get("tier", 2)
                 domains      = classification.get("domains", [])
                 tools_needed = classification.get("tools_needed", [])
@@ -723,7 +753,7 @@ Guidelines:
                 logger.debug("Step 3: Starting tool loop...")
                 t_tools = time.perf_counter()
                 full_text = ""
-                async for token in self._run_tool_loop(messages, tier, tools_needed, trace_id=lf_trace.trace_id):
+                async for token in self._run_tool_loop(messages, tier, tools_needed, trace_id=lf_trace.trace_id, metadata=trace_metadata):
                     full_text += token
                     yield token
 
@@ -775,6 +805,23 @@ def _get_tier_fallback_sequence(tier: int) -> list[int]:
         return [2, 1]
     else:
         return [1]
+
+
+def _get_current_time_str() -> str:
+    """Get current localized time as a formatted string."""
+    from datetime import datetime
+    import os
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        from backports.zoneinfo import ZoneInfo
+    tz_name = os.getenv("TIMEZONE", "Asia/Kolkata")
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        tz = ZoneInfo("Asia/Kolkata")
+    dt = datetime.now(tz)
+    return dt.strftime("%A, %B %d, %Y, %I:%M %p %Z")
 
 
 def _today() -> str:
