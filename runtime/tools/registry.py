@@ -44,6 +44,10 @@ def _load_check_gmail():
     from tools.gmail_check import check_gmail
     return check_gmail
 
+def _load_gmail_actions():
+    from tools.gmail_actions import gmail_actions
+    return gmail_actions
+
 # ── registry ───────────────────────────────────────────────────────────────────
 
 REGISTRY: dict[str, dict] = {
@@ -257,7 +261,126 @@ REGISTRY: dict[str, dict] = {
         "requires_env": ["GMAIL_USER", "GMAIL_APP_PASSWORD"],
     },
     
-    
+    "gmail_actions": {
+        "domain": "email",
+        "description": (
+            "Send, reply to, forward, delete, archive, move, and manage emails in Gmail. "
+            "This is the WRITE tool — use gmail_check for reading/searching. "
+            "Actions: "
+            "'send' — compose and send a new email (requires to, subject, body); "
+            "'reply' — reply to an email by UID from gmail_check output (requires uid, body); "
+            "'reply_all' — reply to all recipients of an email (requires uid, body); "
+            "'forward' — forward an email to new recipients (requires uid, to); "
+            "'delete' — move email to Trash by UID (recoverable, requires uid); "
+            "'delete_permanent' — permanently delete email, NO TRASH, UNRECOVERABLE — always confirm with user first (requires uid); "
+            "'archive' — move email out of Inbox to All Mail without deleting (requires uid); "
+            "'move' — move email to a specific folder or label (requires uid, destination); "
+            "'mark_unread' — mark a read email as unread (requires uid); "
+            "'list_folders' — list all folders and custom labels on this account; "
+            "'create_draft' — save a draft to Gmail Drafts folder (requires to, subject, body). "
+            "UIDs come from gmail_check tool output — shown as 'UID: <value>'. "
+            "Addresses accept 'Name <email>' or plain 'email@domain.com' format. "
+            "Multiple addresses are comma-separated."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": [
+                        "send", "reply", "reply_all", "forward",
+                        "delete", "delete_permanent", "archive", "move",
+                        "mark_unread", "list_folders", "create_draft",
+                    ],
+                    "description": "Which Gmail operation to perform.",
+                },
+                "to": {
+                    "type": "string",
+                    "description": (
+                        "Recipient address(es), comma-separated. "
+                        "Accepts 'Name <email>' or plain 'email@domain.com'. "
+                        "Required for: send, forward, create_draft."
+                    ),
+                },
+                "subject": {
+                    "type": "string",
+                    "maxLength": 998,
+                    "description": "Email subject line. Required for: send, create_draft.",
+                },
+                "body": {
+                    "type": "string",
+                    "description": (
+                        "Plain text email body. "
+                        "Required for: send, reply, reply_all, create_draft. "
+                        "Optional for forward (used as a note before the quoted original)."
+                    ),
+                },
+                "cc": {
+                    "type": "string",
+                    "description": "CC address(es), comma-separated. Optional for send, create_draft.",
+                },
+                "bcc": {
+                    "type": "string",
+                    "description": "BCC address(es), comma-separated. Optional for send only. Not visible to recipients.",
+                },
+                "uid": {
+                    "type": "string",
+                    "description": (
+                        "IMAP UID of the email to act on. "
+                        "Get UIDs from gmail_check output — shown as 'UID: <value>'. "
+                        "Required for: reply, reply_all, forward, delete, delete_permanent, "
+                        "archive, move, mark_unread."
+                    ),
+                },
+                "reply_all": {
+                    "type": "boolean",
+                    "description": (
+                        "If true, reply to all original recipients (From + To + CC). "
+                        "Only used for reply action. Default false."
+                    ),
+                },
+                "extra_to": {
+                    "type": "string",
+                    "description": "Additional reply recipients, comma-separated. Optional for reply/reply_all.",
+                },
+                "note": {
+                    "type": "string",
+                    "description": "Text to prepend before the quoted original in a forward. Optional.",
+                },
+                "permanent": {
+                    "type": "boolean",
+                    "description": (
+                        "For delete_permanent only. Must be true to confirm permanent deletion. "
+                        "ALWAYS confirm with the user before setting this to true."
+                    ),
+                },
+                "destination": {
+                    "type": "string",
+                    "description": (
+                        "Target folder for move action. "
+                        "Use short names: inbox, sent, drafts, spam, trash, archive, starred. "
+                        "Or full IMAP path like '[Gmail]/All Mail' or a custom label name. "
+                        "Use list_folders to see all available options. "
+                        "Required for: move."
+                    ),
+                },
+                "folder": {
+                    "type": "string",
+                    "description": (
+                        "Source mailbox the UID lives in. Default 'inbox'. "
+                        "Set this when the email is NOT in INBOX — e.g. 'sent' for sent mail, "
+                        "'spam' for spam folder. Use short names or full IMAP path."
+                    ),
+                },
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+        "handler": _load_gmail_actions,
+        "enabled": True,
+        "requires_env": ["GMAIL_USER", "GMAIL_APP_PASSWORD"],
+    },
+
     # "google_keep": {
     #     "domain": "notes",
     #     "description": (
