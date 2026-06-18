@@ -97,6 +97,7 @@ class LLMClient:
         messages: list[dict],
         tier: int = 2,
         timeout: float = STREAM_TIMEOUT,
+        trace_id: str | None = None,  # 1. Accept the trace_id here
     ) -> AsyncGenerator[str, None]:
         """
         Stream a response token by token.
@@ -108,11 +109,16 @@ class LLMClient:
 
         logger.debug("LLM stream start  model=%s tier=%d", model, tier)
 
+        # 2. Build the standard OpenAI body payload
         payload = {
             "model": model, 
             "messages": messages, 
             "stream": True,
         }
+
+        # 3. Inject metadata if a trace_id is supplied
+        if trace_id:
+            payload["metadata"] = {"trace_id": trace_id}
 
         try:
             # Using context manager approach ensures clean connection closing on stream interruptions
@@ -233,6 +239,7 @@ class LLMClient:
         tier: int = 2,
         timeout: float = COMPLETE_TIMEOUT,
         retries: int = MAX_RETRIES,
+        metadata: dict | None = None,
     ) -> dict:
         """
         Call the LLM with tool/function definitions and return structured response.
@@ -302,6 +309,8 @@ class LLMClient:
                     "tool_choice": "auto",
                     # "max_tokens": 2048,
                 }
+                if metadata:
+                    request_payload["metadata"] = metadata
                 response = await self._client.post(url, json=request_payload, timeout=timeout)
 
                 if response.status_code == 400 and "tools" in response.text:
@@ -313,6 +322,8 @@ class LLMClient:
                         "function_call": "auto",
                         # "max_tokens": 2048,
                     }
+                    if metadata:
+                        legacy_payload["metadata"] = metadata
                     response = await self._client.post(url, json=legacy_payload, timeout=timeout)
 
                 if response.status_code in (400, 401, 403):
