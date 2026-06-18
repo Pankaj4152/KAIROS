@@ -680,83 +680,84 @@ Guidelines:
                 }
             )
             
-            await self.startup()
-            
-            # Step 1 — classify (wrapped in a span)
-            t_classify = time.perf_counter()
-            
-            # Nest observations manually by calling start_observation on the parent object
-            classifier_span = lf_trace.start_observation(
-                as_type="span", 
-                name="classifier", 
-                input=event.text
-            )
-            
-            logger.debug("Step 1: Starting classification...")
-            classification = await self.classifier.classify(event.text)
-            tier         = classification.get("tier", 2)
-            domains      = classification.get("domains", [])
-            tools_needed = classification.get("tools_needed", [])
-            intent       = classification.get("intent", "unknown")
-            
-            classifier_span.update(output=classification)
-            classifier_span.end()
-
-
-            logger.info(
-                "REQ CLASSIFY  session=%s intent=%s tier=%d domains=%s tools=%s duration=%.2fs",
-                sid, intent, tier, domains, tools_needed, time.perf_counter() - t_classify,
-            )
-            logger.debug("Full classification: %s", classification)
-            
-            # Step 2 — build messages (Pass the trace reference to keep it parented)
-            t_build = time.perf_counter()
-            messages = await self._build_messages(event, domains, tools_needed, parent_trace=lf_trace)
-            
-            logger.debug("Step 2: Building messages...")
-            trace("Orchestrator.process built_messages session=%s count=%d", sid, len(messages))
-            logger.debug("REQ BUILD  session=%s messages=%d duration=%.2fs", 
-                        sid, len(messages), time.perf_counter() - t_build)
-            for i, msg in enumerate(messages):
-                logger.debug("  Message %d: role=%s, content_len=%d", 
-                            i, msg.get("role"), len(str(msg.get("content", ""))))
-            
-            # Step 3 — tool loop
-            logger.debug("Step 3: Starting tool loop...")
-            t_tools = time.perf_counter()
-            full_text = ""
-            async for token in self._run_tool_loop(messages, tier, tools_needed, trace_id=lf_trace.trace_id):
-                full_text += token
-                yield token
-
-            lf_trace.update(output=full_text)
-            lf_trace.end()
-
-            trace("Orchestrator.process response_complete session=%s chars=%d", sid, len(full_text))
-            
-            logger.info(
-                "REQ DONE  session=%s total=%.2fs chars=%d classify=%.2fs build=%.2fs tools=%.2fs",
-                sid, time.perf_counter() - t0, len(full_text), 
-                time.perf_counter() - t_classify,
-                t_build - t_classify,
-                time.perf_counter() - t_tools,
-            )
-            
-            # Step 4 — writeback
-            logger.debug("Step 4: Starting writeback in background...")
-            asyncio.create_task(
-                run_writeback(
-                    session_id=event.session_id,
-                    user_text=event.text,
-                    response_text=full_text,
-                    channel=event.channel,
-                    tier=tier,
-                    intent=intent,
-                    llm=self.llm,
-                    data_dir=self.data_dir,
+            try:
+                await self.startup()
+                
+                # Step 1 — classify (wrapped in a span)
+                t_classify = time.perf_counter()
+                
+                # Nest observations manually by calling start_observation on the parent object
+                classifier_span = lf_trace.start_observation(
+                    as_type="span", 
+                    name="classifier", 
+                    input=event.text
                 )
-            )
-            trace("Orchestrator.process writeback_scheduled session=%s", sid)
+                
+                logger.debug("Step 1: Starting classification...")
+                classification = await self.classifier.classify(event.text)
+                tier         = classification.get("tier", 2)
+                domains      = classification.get("domains", [])
+                tools_needed = classification.get("tools_needed", [])
+                intent       = classification.get("intent", "unknown")
+                
+                classifier_span.update(output=classification)
+                classifier_span.end()
+
+                logger.info(
+                    "REQ CLASSIFY  session=%s intent=%s tier=%d domains=%s tools=%s duration=%.2fs",
+                    sid, intent, tier, domains, tools_needed, time.perf_counter() - t_classify,
+                )
+                logger.debug("Full classification: %s", classification)
+                
+                # Step 2 — build messages (Pass the trace reference to keep it parented)
+                t_build = time.perf_counter()
+                messages = await self._build_messages(event, domains, tools_needed, parent_trace=lf_trace)
+                
+                logger.debug("Step 2: Building messages...")
+                trace("Orchestrator.process built_messages session=%s count=%d", sid, len(messages))
+                logger.debug("REQ BUILD  session=%s messages=%d duration=%.2fs", 
+                            sid, len(messages), time.perf_counter() - t_build)
+                for i, msg in enumerate(messages):
+                    logger.debug("  Message %d: role=%s, content_len=%d", 
+                                i, msg.get("role"), len(str(msg.get("content", ""))))
+                
+                # Step 3 — tool loop
+                logger.debug("Step 3: Starting tool loop...")
+                t_tools = time.perf_counter()
+                full_text = ""
+                async for token in self._run_tool_loop(messages, tier, tools_needed, trace_id=lf_trace.trace_id):
+                    full_text += token
+                    yield token
+
+                lf_trace.update(output=full_text)
+
+                trace("Orchestrator.process response_complete session=%s chars=%d", sid, len(full_text))
+                
+                logger.info(
+                    "REQ DONE  session=%s total=%.2fs chars=%d classify=%.2fs build=%.2fs tools=%.2fs",
+                    sid, time.perf_counter() - t0, len(full_text), 
+                    t_build - t_classify,
+                    t_tools - t_build,
+                    time.perf_counter() - t_tools,
+                )
+                
+                # Step 4 — writeback
+                logger.debug("Step 4: Starting writeback in background...")
+                asyncio.create_task(
+                    run_writeback(
+                        session_id=event.session_id,
+                        user_text=event.text,
+                        response_text=full_text,
+                        channel=event.channel,
+                        tier=tier,
+                        intent=intent,
+                        llm=self.llm,
+                        data_dir=self.data_dir,
+                    )
+                )
+                trace("Orchestrator.process writeback_scheduled session=%s", sid)
+            finally:
+                lf_trace.end()
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────────
