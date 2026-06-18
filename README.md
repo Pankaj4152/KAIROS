@@ -103,6 +103,13 @@ cd runtime && python main.py # terminal 3
 
 ---
 
+## Mark 3
+
+Mark 3 introduces active user automation features: proactive email channel briefings via SMTP (replacing Telegram alerts), full Google Calendar write/update support, read-only Gmail IMAP tools, and concurrency benchmarking enhancements.
+See [Release Notes (Mark 3)](docs/RELEASE_NOTES_MARK3.md) and [Version History](RELEASES.md).
+
+---
+
 ## Mark 2
 
 Mark 2 introduces resilience-focused behavior: automatic tier fallback, safer tool-loop degradation, and clearer operational diagnostics.

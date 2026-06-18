@@ -1,6 +1,8 @@
 # Version History
 
-## v2.1.0 - Email SMTP Briefing & Integrated Tools (June 2026)
+## v3.0.0 - Mark 3: Integrated Automation & Proactive Briefings (June 2026)
+
+*Detailed release notes, code changes, and test verification can be found in the [Mark 3 Release Notes](file:///f:/Projects/KAIROS/docs/RELEASE_NOTES_MARK3.md) document.*
 
 - **Email Channel briefings**: Daily morning briefings are now sent proactively via secure HTML emails using Gmail SMTP transport (replacing Telegram alerts).
 - **Gmail IMAP Tool**: Added `check_gmail` tool for extracting unread inbox mail headers asynchronously.
