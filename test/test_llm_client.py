@@ -56,7 +56,8 @@ class TestResolveModel:
 
 
 class TestConstructor:
-    def test_default_base_url(self):
+    def test_default_base_url(self, monkeypatch):
+        monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
         from llm.client import LLMClient
         client = LLMClient()
         logger.info("Default base_url: %s", client.base_url)
@@ -257,6 +258,37 @@ class TestCompleteWithTools:
         assert result["content"][0]["type"] == "text"
         assert result["content"][1]["type"] == "tool_use"
         assert result["content"][1]["name"] == "web_search"
+
+    def test_complete_with_tools_includes_metadata(self):
+        from llm.client import LLMClient
+        
+        client = LLMClient()
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "choices": [
+                {
+                    "message": {
+                        "content": "ok",
+                        "tool_calls": [],
+                    }
+                }
+            ]
+        }
+        
+        client._client.post = AsyncMock(return_value=mock_response)
+        
+        messages = [{"role": "user", "content": "hi"}]
+        tools = []
+        metadata = {"trace_id": "test-trace-id"}
+        
+        run(client.complete_with_tools(messages, tools, metadata=metadata))
+        
+        # Verify the post call payload includes metadata
+        called_args, called_kwargs = client._client.post.call_args
+        payload = called_kwargs["json"]
+        assert payload["metadata"] == {"trace_id": "test-trace-id"}
 
     def test_complete_with_tools_falls_back_to_legacy_functions_on_400(self):
         from llm.client import LLMClient

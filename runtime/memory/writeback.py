@@ -27,6 +27,8 @@ from llm.client import LLMClient
 from memory.session_store import append_turn, needs_compaction, compact, get_history
 from memory.vector_store import embed_and_store
 
+from runtime.utils.storage import storage_manager
+
 logger = logging.getLogger(__name__)
 
 
@@ -81,6 +83,7 @@ async def _append_session(
     channel: str,
     tier: int,
     llm: LLMClient,
+    trace_id: str | None = None,
 ) -> None:
     try:
         await append_turn(session_id, "user", user_text,
@@ -90,13 +93,13 @@ async def _append_session(
 
         if await needs_compaction(session_id):
             logger.info("Session %s needs compaction", session_id[:8])
-            await _compact_session(session_id, llm)
+            await _compact_session(session_id, llm, trace_id=trace_id)
 
     except Exception as e:
         logger.warning("append_session failed for %s: %s", session_id[:8], e)
 
 
-async def _compact_session(session_id: str, llm: LLMClient) -> None:
+async def _compact_session(session_id: str, llm: LLMClient, trace_id: str | None = None) -> None:
     try:
         history = await get_history(session_id, last_n=20)
         if not history:
@@ -113,6 +116,7 @@ async def _compact_session(session_id: str, llm: LLMClient) -> None:
             [{"role": "user", "content": prompt}],
             tier=1,
             timeout=15.0,
+            trace_id=trace_id,
         )
         await compact(session_id, summary)
         logger.info("Session %s compacted", session_id[:8])
@@ -124,6 +128,7 @@ async def _extract_facts(
     user_text: str,
     response_text: str,
     llm: LLMClient,
+    trace_id: str | None = None,
 ) -> list[dict]:
     """
     Use tier-1 LLM to extract structured facts from the conversation turn.
@@ -143,6 +148,7 @@ async def _extract_facts(
             [{"role": "user", "content": prompt}],
             tier=1,
             timeout=10.0,
+            trace_id=trace_id,
         )
 
         # Parse defensively — tier-1 models are inconsistent
@@ -195,7 +201,8 @@ async def _save_facts(facts: list[dict], data_dir: str) -> None:
 
     prefs_path = os.path.join(data_dir, "preferences.json")
 
-    def _run():
+    # Keep only synchronous, blocking file-system logic inside the thread worker
+    def _run_io():
         # Load existing prefs
         try:
             with open(prefs_path, "r", encoding="utf-8") as f:
@@ -212,10 +219,13 @@ async def _save_facts(facts: list[dict], data_dir: str) -> None:
 
         with open(prefs_path, "w", encoding="utf-8") as f:
             json.dump(prefs, f, indent=2, ensure_ascii=False)
-
-        logger.debug("Saved %d facts to preferences.json", len(facts))
-
-    await asyncio.to_thread(_run)
+    
+    # 1. Safely run disk updates on a worker thread
+    await asyncio.to_thread(_run_io)
+    logger.debug("Saved local records to preferences.json")
+    # 2. Call your bucket sync up out here since _save_facts IS an async def!
+    await storage_manager.sync_up_background("preferences.json")
+    logger.debug("Asynchronously uploaded preferences.json update back up to R2.")
 
 # Intents that carry no useful information for memory.
 # Session history is still preserved (conversation flow matters),
@@ -234,6 +244,7 @@ async def run_writeback(
     intent: str = "question",
     llm: LLMClient | None = None,
     data_dir: str | None = None,
+    trace_id: str | None = None,
 ) -> None:
     """
     Run write-back jobs after a completed response.
@@ -254,6 +265,7 @@ async def run_writeback(
         llm:           LLM client for compaction + fact extraction.
                        Defaults to a new LLMClient() if not provided.
         data_dir:      where preferences.json lives. Defaults to DATA_DIR env var.
+        trace_id:      trace ID to propagate trace parenting in background jobs.
     """
     import os
     _llm      = llm or LLMClient()
@@ -267,7 +279,7 @@ async def run_writeback(
     )
 
     # Session append always runs — preserves conversation flow
-    session_task = _append_session(session_id, user_text, response_text, channel, tier, _llm)
+    session_task = _append_session(session_id, user_text, response_text, channel, tier, _llm, trace_id=trace_id)
 
     if skip_memory:
         # Chitchat — only save session history, skip embedding + facts
@@ -280,7 +292,7 @@ async def run_writeback(
 
     # Full writeback — embed + session + facts in parallel
     embed_task = _embed_turn(session_id, user_text, response_text)
-    facts_task = _extract_facts(user_text, response_text, _llm)
+    facts_task = _extract_facts(user_text, response_text, _llm, trace_id=trace_id)
 
     embed_result, _, facts = await asyncio.gather(
         embed_task,
@@ -305,3 +317,13 @@ async def run_writeback(
         await _save_facts(facts, _data_dir)
 
     logger.debug("Writeback complete for session %s", session_id[:8])
+
+
+    # Trigger the automated push using your relative local directory structure
+    from runtime.utils.storage import storage_manager
+    
+    # This pushes 'data/sessions/session_id.json' as 'sessions/session_id.json' to R2
+    session_relative_key = f"sessions/{session_id}.json"
+    await storage_manager.sync_up_background(session_relative_key)
+    
+    logger.debug("Writeback processing complete and synced to R2 bucket backup.")

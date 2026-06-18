@@ -68,11 +68,11 @@ class TestParse:
     def test_unknown_domains_dropped(self):
         from orchestrator.classifier import Classifier
         c = Classifier.__new__(Classifier)
-        raw = '{"intent":"question","complexity":1,"domains":["tasks","weather","unknown"],"tools_needed":[],"tier":1}'
+        raw = '{"intent":"question","complexity":1,"domains":["tasks","unreal","unknown"],"tools_needed":[],"tier":1}'
         result = c._parse(raw)
         logger.info("Domains after filtering: %s", result["domains"])
         assert result["domains"] == ["tasks"]
-        assert "weather" not in result["domains"]
+        assert "unreal" not in result["domains"]
 
     def test_unknown_tools_dropped(self):
         from orchestrator.classifier import Classifier
@@ -143,7 +143,7 @@ class TestClassify:
     def test_classify_uses_tier1(self):
         """Classifier must use tier 1 (local phi) — never tier 2 for classification."""
         c = _make_classifier('{"intent":"chitchat","complexity":1,"domains":[],"tools_needed":[],"tier":1}')
-        run(c.classify("hello"))
+        run(c.classify("how to build a website"))
         _, kwargs = c.llm.complete.call_args
         assert kwargs.get("tier") == 1, f"Classifier should use tier=1, got tier={kwargs.get('tier')}"
 

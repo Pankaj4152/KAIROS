@@ -33,10 +33,16 @@ logger = logging.getLogger(__name__)
 
 DATA_DIR           = os.getenv("DATA_DIR", "./data")
 DB_PATH            = os.path.join(DATA_DIR, "kairos.db")
-OLLAMA_BASE_URL    = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
-EMBEDDING_DIM      = 768   # nomic-embed-text output dimension
+# OLLAMA_BASE_URL    = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+# OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+# EMBEDDING_DIM      = 768   # nomic-embed-text output dimension
 
+# Default to your Render url or local litellm proxy instance
+LITELLM_BASE_URL   = os.getenv("LITELLM_BASE_URL", "http://localhost:4000")
+# Model can be set in .env (e.g., "text-embedding-3-small", "gemini/text-embedding-004", or "ollama/nomic-embed-text")
+EMBEDDING_MODEL    = os.getenv("EMBEDDING_MODEL", "ollama/nomic-embed-text")
+# Optional: If your LiteLLM proxy requires a master/token key
+LITELLM_MASTER_KEY = os.getenv("LITELLM_MASTER_KEY", "")
 
 # ── connection ────────────────────────────────────────────────────────────────
 
@@ -76,24 +82,35 @@ def init_vector_store():
             ON memory_embeddings(session_id)
         """)
         conn.commit()
-    logger.debug("Vector store ready (pure Python, nomic-embed-text)")
+        logger.debug(f"Vector store ready (via LiteLLM proxy using {EMBEDDING_MODEL})")
 
 
 # ── embedding ─────────────────────────────────────────────────────────────────
 
 async def _embed(text: str) -> list[float]:
     """
-    Get embedding vector from nomic-embed-text via Ollama.
-    Returns a list of 768 floats.
-    Raises on network error or model not found.
+    Get embedding vector using LiteLLM's unified OpenAI-compatible endpoint.
+    Automatically handles Ollama, OpenAI, Gemini, etc. based on configurations.
     """
+    headers = {}
+    if LITELLM_MASTER_KEY:
+        headers["Authorization"] = f"Bearer {LITELLM_MASTER_KEY}"
+
     async with httpx.AsyncClient(timeout=30.0) as client:
+        # LiteLLM exposes standard OpenAI-compatible /v1/embeddings endpoints
         resp = await client.post(
-            f"{OLLAMA_BASE_URL}/api/embeddings",
-            json={"model": OLLAMA_EMBED_MODEL, "prompt": text},
+            f"{LITELLM_BASE_URL.rstrip('/')}/v1/embeddings",
+            headers=headers,
+            json={
+                "model": EMBEDDING_MODEL, 
+                "input": [text]  # Standard OpenAI format wraps text in a list
+            },
         )
         resp.raise_for_status()
-        return resp.json()["embedding"]
+        
+        # Standard OpenAI response structure parsed cleanly from LiteLLM wrapper
+        data = resp.json()
+        return data["data"][0]["embedding"]
 
 
 # ── cosine similarity ─────────────────────────────────────────────────────────

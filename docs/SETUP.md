@@ -64,6 +64,12 @@ Optional keys (voice, search, calendar) can be added later. See [`.env.example`]
 |----------|---------|-------------|
 | `TELEGRAM_BOT_TOKEN` | — | From @BotFather |
 | `TELEGRAM_USER_ID` | — | Your numeric Telegram ID |
+| `SMTP_SERVER` | `smtp.gmail.com` | SMTP server host for Email morning briefings |
+| `SMTP_PORT` | `587` | SMTP port (typically 587 for TLS) |
+| `SMTP_USERNAME` | — | Username/email address for SMTP credentials |
+| `SMTP_PASSWORD` | — | Gmail SMTP App Password |
+| `EMAIL_FROM` | — | Sender email address for morning briefings |
+| `EMAIL_TO` | — | Destination email address for briefings |
 
 #### Tools & Search
 | Variable | Default | Description |
@@ -74,6 +80,8 @@ Optional keys (voice, search, calendar) can be added later. See [`.env.example`]
 | `TAVILY_API_KEY` | — | Tavily Search (optional) |
 | `SERPER_API_KEY` | — | Serper.dev search (optional) |
 | `GOOGLE_CALENDAR_CREDENTIALS_PATH` | `./data/gcal_creds.json` | Google Calendar credentials |
+| `GMAIL_USER` | — | Gmail username for reading inbox headers |
+| `GMAIL_APP_PASSWORD` | — | App Password for secure IMAP login to Gmail |
 
 #### Internal Services
 | Variable | Default | Description |
@@ -204,10 +212,10 @@ Press Ctrl+C to stop
 
 ### Diagnostics
 
-Use the latency probe to compare model routes directly against LiteLLM:
+Use the latency probe to compare model routes directly against LiteLLM. You can specify a benchmark prompt scenario (`--benchmark [simple|reasoning|essay|system_design|coding]`) and run concurrent loads (`--concurrency N`):
 
 ```bash
-python runtime/latency_probe.py --models tier1 tier2 tier3
+python runtime/latency_probe.py --models tier1 tier2 tier3 --benchmark simple --concurrency 1
 ```
 
 ---
@@ -251,3 +259,5 @@ This starts Ollama, LiteLLM, and Kairos together. Edit `docker-compose.yml` for 
 | LLM calls timing out | Check LiteLLM is running: `curl http://localhost:4000/health` |
 | No search results | Default backend is DuckDuckGo (no key needed). Check `SEARCH_BACKEND` in `.env` |
 | WebUI not loading | Make sure you're running `python main.py` from the `runtime/` directory |
+| Email briefings fail or SMTP errors | Verify `SMTP_USERNAME` and `SMTP_PASSWORD` are correct. Ensure you are using a secure Google **App Password** rather than your master password, and port `587` is open. |
+| `check_gmail` tool cannot retrieve mail | Verify `GMAIL_USER` and `GMAIL_APP_PASSWORD` environment variables are present. Make sure IMAP access is enabled inside your Gmail Account settings. |

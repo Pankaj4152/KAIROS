@@ -56,6 +56,11 @@ from orchestrator.classifier import Classifier
 from tools.executor import execute
 from tools.registry import get_tool_schemas
 
+
+from langfuse import Langfuse, propagate_attributes
+import litellm
+
+
 logger = logging.getLogger(__name__)
 
 # Tools the classifier pre-fetches before the LLM call.
@@ -64,6 +69,11 @@ PRE_LLM_TOOLS = {"web_search"}
 
 # Safe fallback message when all recovery attempts fail
 FALLBACK_MESSAGE = "I'm having difficulty responding right now. Please try again."
+
+
+# Initialize Langfuse client
+langfuse_client = Langfuse()
+
 
 
 class Orchestrator:
@@ -127,7 +137,7 @@ class Orchestrator:
 
     async def _fetch_tasks_block(self) -> str | None:
         try:
-            tasks = await fetch_open_tasks()
+            tasks = await asyncio.to_thread(fetch_open_tasks)
             if not tasks:
                 return None
             lines = "\n".join(
@@ -142,7 +152,7 @@ class Orchestrator:
 
     async def _fetch_events_block(self) -> str | None:
         try:
-            events = await fetch_upcoming_events(limit=3)
+            events = await asyncio.to_thread(fetch_upcoming_events, limit=3)
             if not events:
                 return None
             lines = "\n".join(
@@ -156,7 +166,7 @@ class Orchestrator:
 
     async def _fetch_habits_block(self) -> str | None:
         try:
-            habits = await fetch_habits()
+            habits = await asyncio.to_thread(fetch_habits)
             if not habits:
                 return None
             lines = "\n".join(
@@ -171,7 +181,7 @@ class Orchestrator:
 
     async def _fetch_spending_block(self) -> str | None:
         try:
-            rows = await fetch_spending_summary()
+            rows = await asyncio.to_thread(fetch_spending_summary)
             if not rows:
                 return None
             lines = "\n".join(
@@ -232,6 +242,7 @@ class Orchestrator:
         self,
         messages: list[dict],
         tier: int,
+        trace_id: str, # Accept trace_id
         timeout: float = None,
     ) -> AsyncGenerator[str, None]:
         """
@@ -277,7 +288,8 @@ class Orchestrator:
                 token_count = 0
                 
                 async for token in self.llm.stream(
-                    messages, tier=attempt_tier, timeout=timeout
+                    messages, tier=attempt_tier, timeout=timeout,
+                    trace_id=trace_id # Explicit link
                 ):
                     yield token
                     token_count += 1
@@ -356,6 +368,7 @@ class Orchestrator:
         messages: list[dict],
         tier: int,
         tools_needed: list[str],
+        trace_id: str, # Accept trace_id from parent
     ) -> AsyncGenerator[str, None]:
         """
         Agentic tool-use loop with tier fallback and graceful degradation.
@@ -395,7 +408,7 @@ class Orchestrator:
             logger.debug("No agentic tools, streaming directly")
             trace("Orchestrator.tool_loop no_agentic_tools streaming_direct")
             async for token in self._stream_with_tier_fallback(
-                messages, tier, timeout=response_timeout
+                messages, tier, timeout=response_timeout, trace_id=trace_id
             ):
                 yield token
             return
@@ -422,6 +435,7 @@ class Orchestrator:
                         tools=agentic_schemas,
                         tier=attempt_tier,
                         timeout=response_timeout,
+                        metadata={"langfuse_trace_id": trace_id} # Explicit link
                     )
                     
                     current_tier = attempt_tier  # Remember successful tier
@@ -463,7 +477,7 @@ class Orchestrator:
                     round_num + 1,
                 )
                 async for token in self._stream_with_tier_fallback(
-                    current_messages, current_tier, timeout=response_timeout
+                    current_messages, current_tier, timeout=response_timeout, trace_id=trace_id
                 ):
                     yield token
                 return
@@ -549,7 +563,7 @@ class Orchestrator:
             
             try:
                 async for token in self._stream_with_tier_fallback(
-                    current_messages, current_tier, timeout=response_timeout
+                    current_messages, current_tier, timeout=response_timeout, trace_id=trace_id
                 ):
                     yield token
             except Exception as e:
@@ -581,6 +595,7 @@ Guidelines:
         event: KairosEvent,
         domains: list[str],
         tools_needed: list[str],
+        parent_trace
     ) -> list[dict]:
         """
         Assemble the full messages list for the first LLM call.
@@ -588,6 +603,12 @@ Guidelines:
         
         Uses safe_get_history (ENHANCEMENT #4) so history errors don't block response.
         """
+        # Nest context span properly under the parent trace
+        context_span = parent_trace.start_observation(
+            as_type="span",
+            name="context-assembly", 
+            metadata={"domains": str(domains), "tools_needed": str(tools_needed)}
+        )
         context_task = self._build_context(domains, event.text)
         tools_task   = self._run_pre_llm_tools(tools_needed, event.text)
         history_task = self._safe_get_history(event.session_id, last_n=8)
@@ -597,6 +618,14 @@ Guidelines:
             tools_task,
             history_task,
         )
+
+        context_span.update(metadata={
+            "context_chars": len(context),
+            "pretools_chars": len(tool_results),
+            "history_turns": len(history)
+        })
+        context_span.end()
+
         trace(
             "Orchestrator.build_messages context_chars=%d pretools_chars=%d history_turns=%d",
             len(context),
@@ -635,88 +664,99 @@ Guidelines:
         """
         t0 = time.perf_counter()
         sid = event.session_id[:8]
-        trace(
-            "Orchestrator.process start session=%s channel=%s text_len=%d",
-            sid,
-            event.channel,
-            len(event.text),
-        )
-        
-        logger.info(
-            "REQ START  session=%s channel=%s text=%r",
-            sid, event.channel, event.text[:60],
-        )
-        logger.debug("Full request text: %r", event.text)
-        
-        await self.startup()
-        
-        # Step 1 — classify
-        t_classify = time.perf_counter()
-        logger.debug("Step 1: Starting classification...")
-        classification = await self.classifier.classify(event.text)
-        tier         = classification.get("tier", 2)
-        domains      = classification.get("domains", [])
-        tools_needed = classification.get("tools_needed", [])
-        intent       = classification.get("intent", "unknown")
-        trace(
-            "Orchestrator.process classification session=%s intent=%s tier=%d domains=%s tools=%s",
-            sid,
-            intent,
-            tier,
-            domains,
-            tools_needed,
-        )
-        
-        logger.info(
-            "REQ CLASSIFY  session=%s intent=%s tier=%d domains=%s tools=%s duration=%.2fs",
-            sid, intent, tier, domains, tools_needed, time.perf_counter() - t_classify,
-        )
-        logger.debug("Full classification: %s", classification)
-        
-        # Step 2 — build messages
-        logger.debug("Step 2: Building messages...")
-        t_build = time.perf_counter()
-        messages = await self._build_messages(event, domains, tools_needed)
-        trace("Orchestrator.process built_messages session=%s count=%d", sid, len(messages))
-        logger.debug("REQ BUILD  session=%s messages=%d duration=%.2fs", 
-                    sid, len(messages), time.perf_counter() - t_build)
-        for i, msg in enumerate(messages):
-            logger.debug("  Message %d: role=%s, content_len=%d", 
-                        i, msg.get("role"), len(str(msg.get("content", ""))))
-        
-        # Step 3 — tool loop
-        logger.debug("Step 3: Starting tool loop...")
-        t_tools = time.perf_counter()
-        full_text = ""
-        async for token in self._run_tool_loop(messages, tier, tools_needed):
-            full_text += token
-            yield token
 
-        trace("Orchestrator.process response_complete session=%s chars=%d", sid, len(full_text))
-        
-        logger.info(
-            "REQ DONE  session=%s total=%.2fs chars=%d classify=%.2fs build=%.2fs tools=%.2fs",
-            sid, time.perf_counter() - t0, len(full_text), 
-            time.perf_counter() - t_classify,
-            t_build - t_classify,
-            time.perf_counter() - t_tools,
-        )
-        
-        # Step 4 — writeback
-        logger.debug("Step 4: Starting writeback in background...")
-        asyncio.create_task(
-            run_writeback(
-                session_id=event.session_id,
-                user_text=event.text,
-                response_text=full_text,
-                channel=event.channel,
-                tier=tier,
-                intent=intent,
-                llm=self.llm,
-                data_dir=self.data_dir,
+        with propagate_attributes(session_id=event.session_id):
+            # 1. Start a global root span (which serves as the trace)
+            # Using manual observation management since this method is an AsyncGenerator
+            lf_trace = langfuse_client.start_observation(
+                as_type="span",
+                name="kairos-process",
+                input=event.text,
+                metadata={
+                    "channel": event.channel,
+                    "text_len": str(len(event.text))  # Ensure primitive attributes are string-coerced in v4
+                }
             )
-        )
-        trace("Orchestrator.process writeback_scheduled session=%s", sid)
+            
+            try:
+                await self.startup()
+                
+                # Step 1 — classify (wrapped in a span)
+                t_classify = time.perf_counter()
+                
+                # Nest observations manually by calling start_observation on the parent object
+                classifier_span = lf_trace.start_observation(
+                    as_type="chain", 
+                    name="classifier", 
+                    input=event.text
+                )
+                
+                logger.debug("Step 1: Starting classification...")
+                classification = await self.classifier.classify(event.text, trace_id=lf_trace.trace_id)
+                tier         = classification.get("tier", 2)
+                domains      = classification.get("domains", [])
+                tools_needed = classification.get("tools_needed", [])
+                intent       = classification.get("intent", "unknown")
+                
+                classifier_span.update(output=classification)
+                classifier_span.end()
+
+                logger.info(
+                    "REQ CLASSIFY  session=%s intent=%s tier=%d domains=%s tools=%s duration=%.2fs",
+                    sid, intent, tier, domains, tools_needed, time.perf_counter() - t_classify,
+                )
+                logger.debug("Full classification: %s", classification)
+                
+                # Step 2 — build messages (Pass the trace reference to keep it parented)
+                t_build = time.perf_counter()
+                messages = await self._build_messages(event, domains, tools_needed, parent_trace=lf_trace)
+                
+                logger.debug("Step 2: Building messages...")
+                trace("Orchestrator.process built_messages session=%s count=%d", sid, len(messages))
+                logger.debug("REQ BUILD  session=%s messages=%d duration=%.2fs", 
+                            sid, len(messages), time.perf_counter() - t_build)
+                for i, msg in enumerate(messages):
+                    logger.debug("  Message %d: role=%s, content_len=%d", 
+                                i, msg.get("role"), len(str(msg.get("content", ""))))
+                
+                # Step 3 — tool loop
+                logger.debug("Step 3: Starting tool loop...")
+                t_tools = time.perf_counter()
+                full_text = ""
+                async for token in self._run_tool_loop(messages, tier, tools_needed, trace_id=lf_trace.trace_id):
+                    full_text += token
+                    yield token
+
+                lf_trace.update(output=full_text)
+
+                trace("Orchestrator.process response_complete session=%s chars=%d", sid, len(full_text))
+                
+                logger.info(
+                    "REQ DONE  session=%s total=%.2fs chars=%d classify=%.2fs build=%.2fs tools=%.2fs",
+                    sid, time.perf_counter() - t0, len(full_text), 
+                    t_build - t_classify,
+                    t_tools - t_build,
+                    time.perf_counter() - t_tools,
+                )
+                
+                # Step 4 — writeback
+                logger.debug("Step 4: Starting writeback in background...")
+                asyncio.create_task(
+                    run_writeback(
+                        session_id=event.session_id,
+                        user_text=event.text,
+                        response_text=full_text,
+                        channel=event.channel,
+                        tier=tier,
+                        intent=intent,
+                        llm=self.llm,
+                        data_dir=self.data_dir,
+                        trace_id=lf_trace.trace_id,
+                    )
+                )
+                trace("Orchestrator.process writeback_scheduled session=%s", sid)
+            finally:
+                lf_trace.end()
 
 
 # ─── helpers ──────────────────────────────────────────────────────────────────────

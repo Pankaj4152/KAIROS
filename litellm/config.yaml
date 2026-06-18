@@ -1,15 +1,69 @@
 model_list:
   - model_name: tier1
     litellm_params:
-      model: ollama/qwen2.5:3b-instruct
-      api_base: http://localhost:11434
+      # 500 Requests per day - Perfect for fast utility tasks
+      model: gemini/gemini-3.1-flash-lite
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: tier1
+    litellm_params:
+      # 500 Requests per day - Perfect for fast utility tasks
+      model: gemini/gemini-3.1-flash-lite
+      api_key: os.environ/GEMINI_API_KEY_2
+
 
   - model_name: tier2
     litellm_params:
-      model: ollama/qwen2.5:7b-instruct
-      api_base: http://localhost:11434
+      # 1,500 Requests per day - High-performance main assistant
+      model: gemini/gemini-3.1-flash-lite
+      # model: gemini/gemma-4-26b-a4b-it
+      api_key: os.environ/GEMINI_API_KEY
+      rpm: 15
+  
+  - model_name: tier2
+    litellm_params:
+      # 1,500 Requests per day - High-performance main assistant
+      model: gemini/gemini-3.1-flash-lite
+      # model: gemini/gemma-4-26b-a4b-it
+      api_key: os.environ/GEMINI_API_KEY_2
+      rpm: 15
 
   - model_name: tier3
     litellm_params:
-      model: gemini/gemini-2.5-flash
+      # 1,500 Requests per day - Maximum reasoning and coding power
+      # model: gemini/gemma-4-31b-it
+      model: gemini/gemini-3.1-flash-lite
       api_key: os.environ/GEMINI_API_KEY
+      rpm: 15
+  
+  - model_name: tier3
+    litellm_params:
+      # 1,500 Requests per day - Maximum reasoning and coding power
+      # model: gemini/gemma-4-31b-it
+      model: gemini/gemini-3.1-flash-lite
+      api_key: os.environ/GEMINI_API_KEY_2
+      rpm: 15
+
+  - model_name: embedding-model
+    litellm_params:
+      model: gemini/gemini-embedding-001
+      api_key: os.environ/GEMINI_API_KEY
+  
+  - model_name: embedding-model
+    litellm_params:
+      model: gemini/gemini-embedding-001
+      api_key: os.environ/GEMINI_API_KEY_2
+
+
+
+
+environment_variables:
+  LANGFUSE_PUBLIC_KEY: os.environ/LANGFUSE_PUBLIC_KEY
+  LANGFUSE_SECRET_KEY: os.environ/LANGFUSE_SECRET_KEY
+  LANGFUSE_HOST: os.environ/LANGFUSE_HOST
+
+general_settings:
+  disable_device_logging: true
+  disable_write_to_db: true
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]
