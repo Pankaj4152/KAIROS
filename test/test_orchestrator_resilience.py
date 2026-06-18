@@ -30,7 +30,7 @@ class TestOrchestratorResilience:
         """Tier 3 failure should fall back and stream from tier 2."""
         llm = MagicMock()
 
-        async def _stream(messages, tier, timeout):
+        async def _stream(messages, tier, timeout, trace_id=None):
             if tier == 3:
                 raise LLMError("tier3 unavailable")
             for token in ["ok", " from", " tier2"]:
@@ -42,6 +42,7 @@ class TestOrchestratorResilience:
         tokens = run(_collect(orch._stream_with_tier_fallback(
             messages=[{"role": "user", "content": "hello"}],
             tier=3,
+            trace_id="test-trace-id",
         )))
 
         assert "".join(tokens) == "ok from tier2"
