@@ -48,6 +48,16 @@ def _load_gmail_actions():
     from tools.gmail_actions import gmail_actions
     return gmail_actions
 
+def _load_weather():
+    from tools.weather import weather
+    return weather
+
+def _load_finance():
+    from tools.finance import finance
+    return finance
+
+
+
 # ── registry ───────────────────────────────────────────────────────────────────
 
 REGISTRY: dict[str, dict] = {
@@ -379,6 +389,65 @@ REGISTRY: dict[str, dict] = {
         "handler": _load_gmail_actions,
         "enabled": True,
         "requires_env": ["GMAIL_USER", "GMAIL_APP_PASSWORD"],
+    },
+
+    "weather": {
+        "domain": "weather",
+        "description": (
+            "Retrieve current weather conditions and a 3-day forecast for any location worldwide. "
+            "Input: a location/city name, and optionally whether a multi-day forecast is needed. "
+            "Use this tool whenever the user asks about the weather, temperature, rain, or general forecast in a specific city/region."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The city or location name (e.g. 'London', 'Paris', 'Tokyo').",
+                },
+                "forecast": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "If true, includes daily min/max temperature, precipitation, and conditions for the next 3 days.",
+                },
+            },
+            "required": ["location"],
+            "additionalProperties": False,
+        },
+        "handler":      _load_weather,
+        "enabled":      True,
+        "requires_env": [],
+    },
+
+    "finance": {
+        "domain": "finance",
+        "description": (
+            "Retrieve current pricing, currency, exchange, change stats, and optional 5-day daily open/close chart history "
+            "for stocks (e.g. AAPL, MSFT, TSLA) or cryptocurrencies (e.g. BTC, ETH, SOL). "
+            "Input: a stock ticker/symbol, crypto coin symbol, or company name (e.g. 'Apple', 'Bitcoin', 'Tesla'). "
+            "Use this tool whenever the user asks for stock quotes, crypto price check, market stats, or daily chart trends."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Stock symbol, crypto ticker, or company/asset name (e.g., 'AAPL', 'BTC', 'Microsoft').",
+                },
+                "history": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "If true, returns daily open and close prices for the last 5 trading days.",
+                },
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+        "handler":      _load_finance,
+        "enabled":      True,
+        "requires_env": [],
     },
 
     # "google_keep": {
