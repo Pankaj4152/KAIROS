@@ -2,7 +2,7 @@
 
 > Installation, configuration, and deployment.
 
-**← [Back to README](../README.md)** · [User Guide](GUIDE.md) · [Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [Diagrams HTML](architecture.html) · [Diagrams PDF](kairos_architecture.pdf)
+**← [Back to README](../README.md)** · [User Guide](GUIDE.md) · [Tool Guide](TOOL_GUIDE.md) · [Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) · [Diagrams HTML](architecture.html) · [Diagrams PDF](kairos_architecture.pdf)
 
 ---
 
@@ -10,11 +10,11 @@
 
 | Requirement | Purpose |
 |-------------|---------|
-| Python 3.11+ | Runtime |
-| [Ollama](https://ollama.ai) | Local qwen2.5 tier models |
+| Python 3.12 | Runtime |
 | [LiteLLM](https://github.com/BerriAI/litellm) | Model proxy — all LLM calls go through this |
+| Gemini API key | Default model for all three tiers (`tier1`/`tier2`/`tier3` in `litellm/config.yaml`) |
 | Telegram bot token | Telegram channel — get from [@BotFather](https://t.me/BotFather) |
-| Gemini API key | Tier 3 cloud model (gemini-2.5-flash) |
+| [Ollama](https://ollama.ai) | Optional — only needed if you wire a `qwen2.5` model into a tier in `litellm/config.yaml` for a free local route |
 
 ---
 
@@ -38,19 +38,19 @@ Open `.env` and fill in your API keys. At minimum you need:
 
 | Key | Required for | Where to get it |
 |-----|-------------|-----------------|
-| `GEMINI_API_KEY` | Gemini models | [aistudio.google.dev](https://aistudio.google.dev) |
+| `GEMINI_API_KEY` | Gemini models (default for all tiers) | [aistudio.google.dev](https://aistudio.google.dev) |
 | `TELEGRAM_BOT_TOKEN` | Telegram channel | [@BotFather](https://t.me/BotFather) |
 | `TELEGRAM_USER_ID` | Auth — locks bot to you | [@userinfobot](https://t.me/userinfobot) |
 
-Optional keys (voice, search, calendar) can be added later. See [`.env.example`](../.env.example) for all options.
+Optional keys (voice, search, calendar, email, cloud backup, tracing) can be added later. See [`.env.example`](../.env.example) for all options.
 
 ### Environment Variable Reference
 
 #### LLM Providers
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GEMINI_API_KEY` | — | Google Gemini models |
-| `OPENAI_API_KEY` | — | Only for text-embedding-3-small |
+| `GEMINI_API_KEY` | — | Google Gemini models. `litellm/config.yaml` ships two key slots per tier (`GEMINI_API_KEY` / `GEMINI_API_KEY_2`) for basic key rotation under rate limits |
+| `OPENAI_API_KEY` | — | Only needed if you set `EMBEDDING_MODEL` to an OpenAI embedding model |
 
 #### Voice (optional)
 | Variable | Default | Description |
@@ -79,22 +79,25 @@ Optional keys (voice, search, calendar) can be added later. See [`.env.example`]
 | `BRAVE_API_KEY` | — | Brave Search (optional) |
 | `TAVILY_API_KEY` | — | Tavily Search (optional) |
 | `SERPER_API_KEY` | — | Serper.dev search (optional) |
-| `GOOGLE_CALENDAR_CREDENTIALS_PATH` | `./data/gcal_creds.json` | Google Calendar credentials |
-| `GMAIL_USER` | — | Gmail username for reading inbox headers |
-| `GMAIL_APP_PASSWORD` | — | App Password for secure IMAP login to Gmail |
+| `GOOGLE_CALENDAR_CREDENTIALS_PATH` | `./data/gcal_creds.json` | Google Calendar OAuth credentials.json path |
+| `GOOGLE_CALENDAR_ID` | `primary` | Which calendar the `google_calendar` tool operates on by default. Get other IDs from the tool's `list_calendars` action |
+| `GMAIL_USER` | — | Gmail address used by both `check_gmail` (IMAP read) and `gmail_actions` (SMTP/IMAP write) |
+| `GMAIL_APP_PASSWORD` | — | Google App Password for secure IMAP/SMTP login — not your account password |
+
+> `finance` (Yahoo Finance) and `weather` (Open-Meteo) need no API keys at all.
 
 #### Internal Services
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LITELLM_BASE_URL` | `http://localhost:4000` | LiteLLM proxy URL |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama URL |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama URL — only relevant if a tier in `litellm/config.yaml` points at an Ollama model |
 
 #### App Config
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATA_DIR` | `./data` | Where persistent state lives |
 | `SESSION_MAX_TURNS` | `20` | Turns before session compaction |
-| `EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model for vector search |
+| `EMBEDDING_MODEL` | `ollama/nomic-embed-text` (code default) — the shipped `litellm/config.yaml` instead exposes a `gemini-embedding-001` route as `embedding-model` | Embedding model used for note/conversation semantic search. Set to match whatever embedding route your LiteLLM config defines |
 
 #### Model Mapping
 | Variable | Default | Description |
@@ -102,6 +105,8 @@ Optional keys (voice, search, calendar) can be added later. See [`.env.example`]
 | `TIER1_MODEL` | `tier1` | Must match `litellm/config.yaml` |
 | `TIER2_MODEL` | `tier2` | Must match `litellm/config.yaml` |
 | `TIER3_MODEL` | `tier3` | Must match `litellm/config.yaml` |
+
+> The shipped `litellm/config.yaml` routes all three tier aliases to `gemini/gemini-3.1-flash-lite` by default — there's no cost/latency difference between tiers out of the box. To get a genuinely free local tier, add a `model_name: tier1` entry pointing at an Ollama model (e.g. `ollama/qwen2.5:3b-instruct`) and run `ollama serve` alongside LiteLLM.
 
 #### Timeouts & Retry
 | Variable | Default | Description |
@@ -126,6 +131,23 @@ Optional keys (voice, search, calendar) can be added later. See [`.env.example`]
 | `BRIEFING_HOUR` | `7` | Morning briefing hour (24h format) |
 | `BRIEFING_MINUTE` | `30` | Morning briefing minute |
 | `TIMEZONE` | `Asia/Kolkata` | Your timezone |
+
+#### Observability (Langfuse, optional)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LANGFUSE_PUBLIC_KEY` | — | Langfuse project public key. Without it, tracing calls fail silently and Kairos still runs normally |
+| `LANGFUSE_SECRET_KEY` | — | Langfuse project secret key |
+| `LANGFUSE_HOST` | — | Langfuse instance URL (cloud or self-hosted) |
+
+#### Cloud Backup (Cloudflare R2, optional)
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `S3_ENDPOINT_URL` | — | Cloudflare R2 endpoint URL |
+| `S3_ACCESS_KEY_ID` | — | R2 access key ID |
+| `S3_SECRET_ACCESS_KEY` | — | R2 secret access key |
+| `S3_BUCKET_NAME` | — | R2 bucket name |
+
+> If any of the four R2 variables are missing, `runtime/utils/storage.py` disables cloud sync entirely and logs a warning — `kairos.db`, `preferences.json`, `profile.md`, and session JSON files then live purely on local disk. This is the default state; R2 sync is opt-in.
 
 ---
 
@@ -168,11 +190,13 @@ Role: 3rd-year CS student, AI/ML + systems focus
 - Over-explain basics
 ```
 
-`data/preferences.json` stores structured preferences (learning goals, execution bias, daily habits). See the file for the full schema.
+`data/preferences.json` stores structured preferences (learning goals, execution bias, daily habits) plus facts extracted from conversation by the writeback pipeline. See the file for the full schema.
 
 ---
 
-## 4. Start Ollama
+## 4. (Optional) Start Ollama for a local tier
+
+Only needed if you've wired an Ollama model into `litellm/config.yaml`. The shipped config routes every tier to Gemini, so this step is skippable for a cloud-only setup.
 
 ```bash
 ollama serve
@@ -210,6 +234,8 @@ Kairos is live
 Press Ctrl+C to stop
 ```
 
+On startup, Kairos also verifies the email SMTP transport (logs a warning if briefings will fail) and, if R2 env vars are set, syncs down `kairos.db`/`preferences.json`/`profile.md`/session history before any channel accepts traffic.
+
 ### Diagnostics
 
 Use the latency probe to compare model routes directly against LiteLLM. You can specify a benchmark prompt scenario (`--benchmark [simple|reasoning|essay|system_design|coding]`) and run concurrent loads (`--concurrency N`):
@@ -237,7 +263,7 @@ Use [Tailscale](https://tailscale.com) — free for personal use, no port forwar
 |-------|----------|-------|
 | **Dev** | Laptop | All services local, Docker Compose optional |
 | **Always-on** | Hetzner CX22 VPS (~€4/month) | 24/7 Telegram polling + cron |
-| **Self-hosted** | Synology / TrueNAS NAS | Full data sovereignty — rsync `data/` to migrate |
+| **Self-hosted** | Synology / TrueNAS NAS | Full data sovereignty — rsync `data/` to migrate, or enable R2 sync for automatic cloud backup |
 
 ### Docker Compose (dev)
 
@@ -245,7 +271,7 @@ Use [Tailscale](https://tailscale.com) — free for personal use, no port forwar
 docker-compose up -d
 ```
 
-This starts Ollama, LiteLLM, and Kairos together. Edit `docker-compose.yml` for custom port mappings.
+This starts LiteLLM and Kairos together (add Ollama to the compose file if you're using a local tier). Edit `docker-compose.yml` for custom port mappings.
 
 ---
 
@@ -255,9 +281,12 @@ This starts Ollama, LiteLLM, and Kairos together. Edit `docker-compose.yml` for 
 |---------|-----|
 | `TELEGRAM_BOT_TOKEN not set` | Fill in `.env` — see [step 2](#2-configure-environment) |
 | `TELEGRAM_USER_ID not set` | Message [@userinfobot](https://t.me/userinfobot) to get your numeric ID |
-| Classifier always returns tier 2 | Check Ollama is running: `curl http://localhost:11434/api/tags` |
+| Classifier always returns the default route | Check the classifier's tier-1 model is reachable: `curl http://localhost:4000/health` (and `curl http://localhost:11434/api/tags` if you're routing tier1 to Ollama) |
 | LLM calls timing out | Check LiteLLM is running: `curl http://localhost:4000/health` |
 | No search results | Default backend is DuckDuckGo (no key needed). Check `SEARCH_BACKEND` in `.env` |
 | WebUI not loading | Make sure you're running `python main.py` from the `runtime/` directory |
 | Email briefings fail or SMTP errors | Verify `SMTP_USERNAME` and `SMTP_PASSWORD` are correct. Ensure you are using a secure Google **App Password** rather than your master password, and port `587` is open. |
-| `check_gmail` tool cannot retrieve mail | Verify `GMAIL_USER` and `GMAIL_APP_PASSWORD` environment variables are present. Make sure IMAP access is enabled inside your Gmail Account settings. |
+| `check_gmail` or `gmail_actions` cannot connect | Verify `GMAIL_USER` and `GMAIL_APP_PASSWORD` are present and IMAP access is enabled in your Gmail account settings |
+| `finance`/`weather` return errors | Both are keyless (Yahoo Finance, Open-Meteo) — check outbound network access, not API keys |
+| R2 cloud sync silently not running | Confirm all four `S3_*` variables are set — `storage_manager` disables itself entirely if any are missing, logging a warning at startup |
+| No traces showing up in Langfuse | Confirm `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`/`LANGFUSE_HOST` are set; tracing fails silently otherwise and Kairos keeps working without it |

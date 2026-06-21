@@ -115,4 +115,4 @@ User: "Mark it read"
   ← "Marked email UID 18943 as read."
 ```
 
-For replying, forwarding, deleting, or sending new mail, the LLM switches to [gmail_actions](gmail_actions.md) using the same UID.
+For replying, forwarding, deleting, or sending new mail, the LLM switches to [gmail_actions](gmail_actions.md) using the same UID.  
