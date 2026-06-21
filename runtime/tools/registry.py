@@ -56,6 +56,23 @@ def _load_finance():
     from tools.finance import finance
     return finance
 
+def _load_tasks():
+    from tools.tasks import tasks
+    return tasks
+ 
+ 
+def _load_spending():
+    from tools.spending import spending
+    return spending
+
+def _load_habits():
+    from tools.habits import habits
+    return habits
+ 
+ 
+def _load_notes():
+    from tools.notes import notes
+    return notes
 
 
 # ── registry ───────────────────────────────────────────────────────────────────
@@ -391,42 +408,23 @@ REGISTRY: dict[str, dict] = {
         "requires_env": ["GMAIL_USER", "GMAIL_APP_PASSWORD"],
     },
 
-    "weather": {
-        "domain": "weather",
-        "description": (
-            "Retrieve current weather conditions and a 3-day forecast for any location worldwide. "
-            "Input: a location/city name, and optionally whether a multi-day forecast is needed. "
-            "Use this tool whenever the user asks about the weather, temperature, rain, or general forecast in a specific city/region."
-        ),
-        "schema": {
-            "type": "object",
-            "properties": {
-                "location": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "The city or location name (e.g. 'London', 'Paris', 'Tokyo').",
-                },
-                "forecast": {
-                    "type": "boolean",
-                    "default": False,
-                    "description": "If true, includes daily min/max temperature, precipitation, and conditions for the next 3 days.",
-                },
-            },
-            "required": ["location"],
-            "additionalProperties": False,
-        },
-        "handler":      _load_weather,
-        "enabled":      True,
-        "requires_env": [],
-    },
-
     "finance": {
         "domain": "finance",
         "description": (
-            "Retrieve current pricing, currency, exchange, change stats, and optional 5-day daily open/close chart history "
-            "for stocks (e.g. AAPL, MSFT, TSLA) or cryptocurrencies (e.g. BTC, ETH, SOL). "
-            "Input: a stock ticker/symbol, crypto coin symbol, or company name (e.g. 'Apple', 'Bitcoin', 'Tesla'). "
-            "Use this tool whenever the user asks for stock quotes, crypto price check, market stats, or daily chart trends."
+            "Retrieve stock, ETF, and cryptocurrency pricing and financial data. "
+            "Uses Yahoo Finance (no API key required). "
+            "Actions: "
+            "'quote' — current price, change vs previous close, pre/post-market price, "
+            "day range, volume, 52-week range, 50/200-day moving averages, "
+            "market cap, P/E ratio, dividend yield (default); "
+            "'history' — OHLCV candle history for a configurable period "
+            "(1d / 5d / 1mo / 3mo / 6mo / 1y / 2y / 5y / max); "
+            "'search' — find a ticker symbol by company name or keyword. "
+            "Ticker format: US stocks use bare symbol (AAPL, TSLA, SPY); "
+            "Indian NSE stocks append .NS (INFY.NS, RELIANCE.NS); "
+            "Indian BSE stocks append .BO; "
+            "Crypto uses bare symbol (BTC, ETH, SOL — auto-converted to BTC-USD etc.); "
+            "Company names like 'Apple' or 'Reliance Industries' are auto-resolved to tickers."
         ),
         "schema": {
             "type": "object",
@@ -434,21 +432,475 @@ REGISTRY: dict[str, dict] = {
                 "query": {
                     "type": "string",
                     "minLength": 1,
-                    "description": "Stock symbol, crypto ticker, or company/asset name (e.g., 'AAPL', 'BTC', 'Microsoft').",
+                    "maxLength": 100,
+                    "description": (
+                        "Ticker symbol or company name. "
+                        "Examples: 'AAPL', 'INFY.NS', 'BTC', 'ETH', 'Apple Inc', 'Reliance Industries'. "
+                        "For Indian stocks use NSE suffix: TATAMOTORS.NS, HDFCBANK.NS."
+                    ),
                 },
-                "history": {
-                    "type": "boolean",
-                    "default": False,
-                    "description": "If true, returns daily open and close prices for the last 5 trading days.",
+                "action": {
+                    "type": "string",
+                    "enum": ["quote", "history", "search"],
+                    "description": "Which data to retrieve. Default 'quote'.",
+                },
+                "period": {
+                    "type": "string",
+                    "enum": ["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "max"],
+                    "description": (
+                        "History period for action='history'. Default '5d'. "
+                        "Interval is auto-selected per period for concise output."
+                    ),
                 },
             },
             "required": ["query"],
             "additionalProperties": False,
         },
-        "handler":      _load_finance,
-        "enabled":      True,
-        "requires_env": [],
+        "handler": _load_finance,
+        "enabled": True,
+        "requires_env": [],   # Yahoo Finance is keyless
     },
+    
+    "weather": {
+        "domain": "weather",
+        "description": (
+            "Get weather conditions and forecasts for any location worldwide. "
+            "Uses Open-Meteo API (free, no API key required). "
+            "Actions: "
+            "'current' — temperature, feels like, humidity, wind speed/direction/gusts, "
+            "UV index, visibility, precipitation, pressure (default); "
+            "'forecast' — daily min/max temp, condition, precipitation sum and chance, "
+            "wind max, UV index, sunrise/sunset for 1–7 days; "
+            "'hourly' — hour-by-hour temp, condition, rain chance, wind, UV for 1–48 hours. "
+            "Supports metric (°C, km/h, mm) and imperial (°F, mph, inch) units."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200,
+                    "description": (
+                        "City name, region, or country. Be specific for accuracy. "
+                        "Examples: 'Mumbai', 'New Delhi', 'London UK', 'New York City', "
+                        "'Bengaluru Karnataka', 'Tokyo Japan'."
+                    ),
+                },
+                "action": {
+                    "type": "string",
+                    "enum": ["current", "forecast", "hourly"],
+                    "description": "Which weather data to return. Default 'current'.",
+                },
+                "days": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 7,
+                    "description": "Number of forecast days for action='forecast'. Default 3.",
+                },
+                "hours": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 48,
+                    "description": "Number of hours for action='hourly'. Default 24.",
+                },
+                "units": {
+                    "type": "string",
+                    "enum": ["metric", "imperial"],
+                    "description": (
+                        "Unit system. 'metric' = °C, km/h, mm (default). "
+                        "'imperial' = °F, mph, inch."
+                    ),
+                },
+            },
+            "required": ["location"],
+            "additionalProperties": False,
+        },
+        "handler": _load_weather,
+        "enabled": True,
+        "requires_env": [],   # Open-Meteo is keyless
+    },
+    
+    "tasks": {
+        "domain": "tasks",
+        "description": (
+            "Create, list, update, complete, delete, and search the user's tasks, "
+            "and view task statistics. Tasks are separate from Google Calendar events "
+            "(Phase 1) — use this for to-dos and work items, use google_calendar for "
+            "meetings and scheduled events. "
+            "Actions: "
+            "'create' — add a new task (title required; optional due_date, project, priority); "
+            "'list' — list tasks, defaults to open tasks sorted by priority then due date, "
+            "filterable by status/priority/due_before/due_after/project; "
+            "'update' — change title, due_date, project, or priority on an existing task "
+            "(requires task_id); "
+            "'complete' — mark a task done (requires task_id; pass undo=true to reopen); "
+            "'delete' — permanently remove a task (requires task_id); "
+            "'search' — full-text search over title and project (requires query); "
+            "'stats' — counts by status/priority, overdue count, due-today count."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["create", "list", "update", "complete", "delete", "search", "stats"],
+                    "description": "Which task operation to perform.",
+                },
+                "task_id": {
+                    "type": "integer",
+                    "description": "Target task ID. Required for update, complete, delete.",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Task title. Required for create; optional for update.",
+                },
+                "due_date": {
+                    "type": "string",
+                    "description": (
+                        "ISO date 'YYYY-MM-DD'. For update, pass an empty string to clear "
+                        "an existing due date."
+                    ),
+                },
+                "project": {
+                    "type": "string",
+                    "description": "Optional project or category tag, e.g. 'kairos', 'college'.",
+                },
+                "priority": {
+                    "type": "integer",
+                    "enum": [1, 2, 3],
+                    "description": "1=low, 2=normal (default), 3=high.",
+                },
+                "status": {
+                    "type": "string",
+                    "enum": ["open", "done"],
+                    "description": "Filter for list action. Defaults to open tasks only.",
+                },
+                "due_before": {
+                    "type": "string",
+                    "description": "Filter for list: tasks due on or before this ISO date.",
+                },
+                "due_after": {
+                    "type": "string",
+                    "description": "Filter for list: tasks due on or after this ISO date.",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Search text for action='search'.",
+                },
+                "undo": {
+                    "type": "boolean",
+                    "description": "For action='complete': pass true to reopen a completed task.",
+                },
+                "days": {
+                    "type": "integer",
+                    "description": "Lookback window in days for action='stats'. Default 7.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max rows returned for list/search. Default 20, max 100.",
+                },
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+        "handler": _load_tasks,
+        "enabled": True,
+        "requires_env": [],   # uses the local kairos.db, no external creds
+    },
+    
+    "spending": {
+        "domain": "spending",
+        "description": (
+            "Log and track personal spending. Manual logging only — the user tells "
+            "you what they spent and you record it. There is no automatic bank/UPI "
+            "sync in this version. "
+            "Actions: "
+            "'log' — record a new expense (amount and category required; optional "
+            "merchant, date, notes); "
+            "'list' — list expenses newest first, filterable by category/month/date range; "
+            "'update' — change amount, category, merchant, date, or notes on an existing "
+            "expense (requires expense_id); "
+            "'delete' — remove a mistakenly logged expense (requires expense_id); "
+            "'budget' — check spend-to-date vs budget for a category (or overall) in a "
+            "given month; pass set_amount to set or update the budget instead of checking it; "
+            "'report' — category breakdown with totals and percentages for a period "
+            "(this_month, last_month, last_7_days, last_30_days, or explicit 'YYYY-MM'). "
+            "Valid categories: food, transport, utilities, entertainment, health, "
+            "shopping, subscriptions, rent, education, other."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["log", "list", "update", "delete", "budget", "report"],
+                    "description": "Which spending operation to perform.",
+                },
+                "expense_id": {
+                    "type": "integer",
+                    "description": "Target expense ID. Required for update, delete.",
+                },
+                "amount": {
+                    "type": "number",
+                    "description": "Expense amount (positive number). Required for log.",
+                },
+                "category": {
+                    "type": "string",
+                    "enum": [
+                        "food", "transport", "utilities", "entertainment",
+                        "health", "shopping", "subscriptions", "rent", "education", "other",
+                    ],
+                    "description": "Expense category. Required for log.",
+                },
+                "merchant": {
+                    "type": "string",
+                    "description": "Optional merchant or vendor name, e.g. 'Swiggy', 'BigBasket'.",
+                },
+                "date": {
+                    "type": "string",
+                    "description": "ISO date 'YYYY-MM-DD'. Defaults to today for log.",
+                },
+                "notes": {
+                    "type": "string",
+                    "description": "Optional free-text note, e.g. 'team lunch'.",
+                },
+                "month": {
+                    "type": "string",
+                    "description": "'YYYY-MM' filter for list, or target month for budget. Defaults to current month for budget.",
+                },
+                "date_from": {
+                    "type": "string",
+                    "description": "Filter for list: expenses on or after this ISO date.",
+                },
+                "date_to": {
+                    "type": "string",
+                    "description": "Filter for list: expenses on or before this ISO date.",
+                },
+                "set_amount": {
+                    "type": "number",
+                    "description": "For action='budget': set/update the budget to this amount instead of checking it.",
+                },
+                "period": {
+                    "type": "string",
+                    "description": (
+                        "For action='report': 'this_month', 'last_month', 'last_7_days', "
+                        "'last_30_days', or explicit 'YYYY-MM'. Default 'this_month'."
+                    ),
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max rows returned for list. Default 20, max 200.",
+                },
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+        "handler": _load_spending,
+        "enabled": True,
+        "requires_env": [],   # uses the local kairos.db, no external creds
+    },
+
+    "habits": {
+        "domain": "habits",
+        "description": (
+            "Track habits: create them, check in daily completions, view streaks "
+            "and consistency, and see a 30-day calendar heatmap. "
+            "Actions: "
+            "'create' — add a new habit (name required; optional target_frequency, "
+            "one of daily/weekdays/3x_week/5x_week/weekly, defaults to daily); "
+            "'list' — list all habits with current streak and last checkin date; "
+            "'checkin' — log a completion for today, or pass date to backfill a past "
+            "day (requires habit_id); "
+            "'undo_checkin' — remove a checkin to fix a mistake (requires habit_id); "
+            "'stats' — streak, 30-day consistency percentage, and an ASCII heatmap "
+            "for one habit (requires habit_id); "
+            "'delete' — permanently remove a habit and its full checkin history "
+            "(requires habit_id)."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["create", "list", "checkin", "undo_checkin", "stats", "delete"],
+                    "description": "Which habit operation to perform.",
+                },
+                "habit_id": {
+                    "type": "integer",
+                    "description": "Target habit ID. Required for checkin, undo_checkin, stats, delete.",
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Habit name. Required for create, e.g. 'meditation', 'gym', 'DSA practice'.",
+                },
+                "target_frequency": {
+                    "type": "string",
+                    "enum": ["daily", "weekdays", "3x_week", "5x_week", "weekly"],
+                    "description": "How often the habit is expected. Defaults to 'daily' for create.",
+                },
+                "date": {
+                    "type": "string",
+                    "description": (
+                        "ISO date 'YYYY-MM-DD' for checkin/undo_checkin. Defaults to today. "
+                        "Pass a past date to backfill a missed checkin."
+                    ),
+                },
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+        "handler": _load_habits,
+        "enabled": True,
+        "requires_env": [],   # uses the local kairos.db, no external creds
+    },
+    
+    "notes": {
+        "domain": "notes",
+        "description": (
+            "Capture, search, and manage notes — fleeting thoughts, decisions, "
+            "and reference material the user explicitly wants to save. This is "
+            "different from automatic conversation memory: notes are deliberately "
+            "written and titled by the user, not extracted from chat turns. "
+            "Actions: "
+            "'create' — write a new note (title required; optional body, tags as "
+            "comma-separated string, and link_type+link_id to attach it to a task "
+            "or habit); "
+            "'list' — list recent notes, newest-updated first, optionally filtered "
+            "by a single tag; "
+            "'get' — fetch one note's full content (requires note_id); "
+            "'search' — fast keyword search over title and body (requires query); "
+            "'semantic_search' — meaning-based search that finds related notes even "
+            "without exact keyword overlap, using the same embedding pipeline as "
+            "conversation memory (requires query); "
+            "'update' — change title, body, or tags on an existing note (requires "
+            "note_id); "
+            "'delete' — permanently remove a note (requires note_id); "
+            "'link' — attach an existing note to a task or habit (requires note_id, "
+            "link_type, link_id)."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": [
+                        "create", "list", "get", "search", "semantic_search",
+                        "update", "delete", "link",
+                    ],
+                    "description": "Which notes operation to perform.",
+                },
+                "note_id": {
+                    "type": "integer",
+                    "description": "Target note ID. Required for get, update, delete, link.",
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Note title. Required for create; optional for update.",
+                },
+                "body": {
+                    "type": "string",
+                    "description": "Note content. Optional for create (defaults empty) and update.",
+                },
+                "tags": {
+                    "type": "string",
+                    "description": "Comma-separated tags, e.g. 'ml,research,kairos'. For create/update.",
+                },
+                "tag": {
+                    "type": "string",
+                    "description": "Single tag to filter by for action='list'.",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Search text for action='search' or 'semantic_search'.",
+                },
+                "link_type": {
+                    "type": "string",
+                    "enum": ["task", "habit"],
+                    "description": "Entity type to link the note to. For create or link.",
+                },
+                "link_id": {
+                    "type": "integer",
+                    "description": "ID of the task or habit to link the note to. For create or link.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max rows for list/search. Default 20, max 100.",
+                },
+                "top_k": {
+                    "type": "integer",
+                    "description": "Max results for semantic_search. Default 5.",
+                },
+            },
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+        "handler": _load_notes,
+        "enabled": True,
+        "requires_env": [],   # keyword search needs nothing; semantic_search reuses
+                            # vector_store.py's existing LITELLM_BASE_URL config
+    },
+    
+
+
+    # "weather": {
+    #     "domain": "weather",
+    #     "description": (
+    #         "Retrieve current weather conditions and a 3-day forecast for any location worldwide. "
+    #         "Input: a location/city name, and optionally whether a multi-day forecast is needed. "
+    #         "Use this tool whenever the user asks about the weather, temperature, rain, or general forecast in a specific city/region."
+    #     ),
+    #     "schema": {
+    #         "type": "object",
+    #         "properties": {
+    #             "location": {
+    #                 "type": "string",
+    #                 "minLength": 1,
+    #                 "description": "The city or location name (e.g. 'London', 'Paris', 'Tokyo').",
+    #             },
+    #             "forecast": {
+    #                 "type": "boolean",
+    #                 "default": False,
+    #                 "description": "If true, includes daily min/max temperature, precipitation, and conditions for the next 3 days.",
+    #             },
+    #         },
+    #         "required": ["location"],
+    #         "additionalProperties": False,
+    #     },
+    #     "handler":      _load_weather,
+    #     "enabled":      True,
+    #     "requires_env": [],
+    # },
+
+    # "finance": {
+    #     "domain": "finance",
+    #     "description": (
+    #         "Retrieve current pricing, currency, exchange, change stats, and optional 5-day daily open/close chart history "
+    #         "for stocks (e.g. AAPL, MSFT, TSLA) or cryptocurrencies (e.g. BTC, ETH, SOL). "
+    #         "Input: a stock ticker/symbol, crypto coin symbol, or company name (e.g. 'Apple', 'Bitcoin', 'Tesla'). "
+    #         "Use this tool whenever the user asks for stock quotes, crypto price check, market stats, or daily chart trends."
+    #     ),
+    #     "schema": {
+    #         "type": "object",
+    #         "properties": {
+    #             "query": {
+    #                 "type": "string",
+    #                 "minLength": 1,
+    #                 "description": "Stock symbol, crypto ticker, or company/asset name (e.g., 'AAPL', 'BTC', 'Microsoft').",
+    #             },
+    #             "history": {
+    #                 "type": "boolean",
+    #                 "default": False,
+    #                 "description": "If true, returns daily open and close prices for the last 5 trading days.",
+    #             },
+    #         },
+    #         "required": ["query"],
+    #         "additionalProperties": False,
+    #     },
+    #     "handler":      _load_finance,
+    #     "enabled":      True,
+    #     "requires_env": [],
+    # },
 
     # "google_keep": {
     #     "domain": "notes",
